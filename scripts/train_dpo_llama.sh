@@ -15,14 +15,15 @@ openrlhf.cli.train_dpo \
    --zero_stage 3 \
    --learning_rate 5e-7 \
    --beta 0.1 \
-   --dataset HuggingFaceH4/ultrafeedback_binarized \
+   --dataset princeton-nlp/llama3-ultrafeedback-armorm \
    --apply_chat_template \
    --chosen_key chosen \
    --rejected_key rejected \
    --flash_attn \
    --load_checkpoint \
    --gradient_checkpointing \
-   --use_wandb True
+   --use_wandb True \
+   --wandb_project DeepRLHF
 EOF
     # --use_wandb [WANDB_TOKENS] or True (use wandb login command)
     # --ipo [for IPO]
