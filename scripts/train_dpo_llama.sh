@@ -22,7 +22,7 @@ openrlhf.cli.train_dpo \
    --flash_attn \
    --load_checkpoint \
    --gradient_checkpointing \
-   --use_wandb 
+   --use_wandb True
 EOF
     # --use_wandb [WANDB_TOKENS] or True (use wandb login command)
     # --ipo [for IPO]
