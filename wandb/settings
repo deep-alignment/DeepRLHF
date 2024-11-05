@@ -1,0 +1,5 @@
+[default]
+entity = iiis-ai
+project = deeprlhf
+base_url = https://api.wandb.ai
+
