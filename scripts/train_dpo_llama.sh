@@ -15,7 +15,7 @@ openrlhf.cli.train_dpo \
    --zero_stage 3 \
    --learning_rate 5e-7 \
    --beta 0.1 \
-   --dataset OpenRLHF/preference_dataset_mixture2_and_safe_pku \
+   --dataset HuggingFaceH4/ultrafeedback_binarized \
    --apply_chat_template \
    --chosen_key chosen \
    --rejected_key rejected \
