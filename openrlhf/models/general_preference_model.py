@@ -8,7 +8,7 @@ from peft import LoraConfig, get_peft_model
 from peft.tuners.lora import LoraLayer
 from transformers import AutoConfig, AutoModel, BitsAndBytesConfig, AutoModelForCausalLM
 from transformers.deepspeed import HfDeepSpeedConfig
-from general_preference.utils.logging import init_logger
+from utils.logging import init_logger
 import torch.nn.functional as F
 
 logger = init_logger(__name__)

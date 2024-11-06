@@ -10,5 +10,22 @@ from .loss import (
     PRMLoss,
     ValueLoss,
     VanillaKTOLoss,
+    SFTMeanLoss,
+    SFTSumLoss,
+    DPORefFreeLoss,
+    GeneralPreferenceLoss,
+    HighDimGeneralPreferenceLoss,
+    PairWiseLoss,
+    GeneralPreferenceRegressionLoss,
+    GeneralPreferenceLearnableTauLoss,
+    GeneralPreferenceLearnableTauRegressionLoss,
+    PairWiseLearnableTauLoss,
+    PairWiseRegressionLoss,
+    PairWiseLearnableTauRegressionLoss,
+    SFTVanillaLoss,
+    HighDimGeneralPreferenceRegressionLoss,
+    HighDimGeneralPreferenceRegressionMoELoss,
+    HighDimGeneralPreferenceMoELoss,
 )
 from .model import get_llm_for_sequence_regression
+from .general_preference_model import get_general_preference_model
