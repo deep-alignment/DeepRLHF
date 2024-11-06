@@ -20,7 +20,7 @@ openrlhf.cli.train_rm \
    --rejected_key rejected \
    --flash_attn \
    --load_checkpoint \
-   --gradient_checkpointing
+   --gradient_checkpointing \
    --use_wandb True \
    --wandb_project DeepRLHF-RM
 EOF

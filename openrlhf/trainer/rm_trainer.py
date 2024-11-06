@@ -161,6 +161,10 @@ class RewardModelTrainer(ABC):
                     reject_reward = reject_reward.float()
 
                 preference_loss = self.loss_fn(chosen_reward, reject_reward, margin)
+                # If preference_loss is a tuple, we use the first element as the loss
+                if isinstance(preference_loss, tuple):
+                    preference_loss = preference_loss[0]
+                    
                 # mixtral
                 if not self.aux_loss:
                     aux_loss = 0
