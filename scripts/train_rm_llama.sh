@@ -7,7 +7,7 @@ openrlhf.cli.train_rm \
    --logging_steps 1 \
    --eval_steps -1 \
    --train_batch_size 128 \
-   --micro_train_batch_size 4 \
+   --micro_train_batch_size 8 \
    --pretrain meta-llama/Llama-3.2-3B-Instruct \
    --bf16 \
    --max_epochs 2 \
