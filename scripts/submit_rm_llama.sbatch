@@ -34,31 +34,10 @@ export CUDA_VISIBLE_DEVICES=0,1,2,3
 echo "Job id: $SLURM_JOB_ID"
 source ./sc_venv_template_hydra/activate.sh 
 
-ARGS=" openrlhf.cli.train_rm \
-   --save_path ./checkpoint/Llama-3.2-3B-Instruct-RM \
-   --save_steps -1 \
-   --logging_steps 1 \
-   --eval_steps -1 \
-   --train_batch_size 128 \
-   --micro_train_batch_size 8 \
-   --pretrain meta-llama/Llama-3.2-3B-Instruct \
-   --bf16 \
-   --max_epochs 2 \
-   --max_len 8192 \
-   --zero_stage 3 \
-   --learning_rate 2e-6 \
-   --l2 1e-3 \
-   --dataset Skywork/Skywork-Reward-Preference-80K-v0.2 \
-   --apply_chat_template \
-   --chosen_key chosen \
-   --rejected_key rejected \
-   --flash_attn \
-   --load_checkpoint \
-   --gradient_checkpointing \
-   --use_wandb True \
-   --wandb_project deeprlhf-rm"
+readonly training_script="scripts/train_rm_llama.sh" 
+source ./${training_script} slurm
 
 srun --cpu_bind=none bash -c "torchrun \
 --nnodes=$SLURM_NNODES \
---rdzv_backend c10d --nproc_per_node=4 --rdzv_id $RANDOM --rdzv_endpoint=$MASTER_ADDR:$MASTER_PORT --rdzv_conf=is_host=\$(if ((SLURM_NODEID)); then echo 0; else echo 1; fi) \
-deepspeed --module $ARGS  "
+--rdzv_backend c10d --nproc_per_node=4 --node_rank $SLURM_PROCID --rdzv_id $RANDOM --rdzv_endpoint=$MASTER_ADDR:$MASTER_PORT --rdzv_conf=is_host=\$(if ((SLURM_NODEID)); then echo 0; else echo 1; fi) \
+ --module ${training_commands}  "
