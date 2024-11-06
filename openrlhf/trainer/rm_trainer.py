@@ -269,6 +269,9 @@ class RewardModelTrainer(ABC):
                     margin = None
 
                 loss = self.loss_fn(chosen_reward, reject_reward, margin)
+                # if preference_loss is a tuple, we use the first element as the loss
+                if isinstance(loss, tuple):
+                    loss = loss[0]
 
                 rewards += [chosen_reward.flatten(), reject_reward.flatten()]
                 acc += (chosen_reward > reject_reward).float().mean().item()
