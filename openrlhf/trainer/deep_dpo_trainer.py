@@ -315,6 +315,7 @@ class DPOTrainer(ABC):
         )
         chosen_logps = all_logps_sum[: chosen_ids.shape[0]]
         rejected_logps = all_logps_sum[chosen_ids.shape[0] :]
+        # Get hidden states for the chosen and rejected inputs
         aux_loss = output.aux_loss if "aux_loss" in output else []
         return chosen_logps, rejected_logps, aux_loss, -all_logps_mean[: chosen_ids.shape[0]].mean()
 
