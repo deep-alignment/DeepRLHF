@@ -82,7 +82,7 @@ class DPOTrainer(ABC):
                 entity=strategy.args.wandb_org,
                 project=strategy.args.wandb_project,
                 group=strategy.args.wandb_group,
-                name="DPO_M_" + str(strategy.args.pretrain) + "_D_" + str(strategy.args.dataset) + "_" + str(strategy.args.max_epochs) + "epoch" + "_" + str(strategy.args.wandb_run_name),
+                name="DPO_M_" + str(strategy.args.pretrain) + "_D_" + str(strategy.args.dataset) + "_" + "mbs" + str(strategy.args.mirco_batch_size) + "_" + str(strategy.args.max_epochs) + "epoch" + "_" + str(strategy.args.wandb_run_name),
                 config=strategy.args.__dict__,
                 reinit=True,
             )
