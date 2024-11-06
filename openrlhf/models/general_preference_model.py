@@ -7,14 +7,14 @@ import torch.nn as nn
 from peft import LoraConfig, get_peft_model
 from peft.tuners.lora import LoraLayer
 from transformers import AutoConfig, AutoModel, BitsAndBytesConfig, AutoModelForCausalLM
-from transformers.deepspeed import HfDeepSpeedConfig
-from utils.logging import init_logger
+# from transformers.deepspeed import HfDeepSpeedConfig
+from openrlhf.utils.logging_utils import init_logger
 import torch.nn.functional as F
 
 logger = init_logger(__name__)
 
 # Construct reward model with a value head for sequence classification. (model also with a lm head) 
-def get_reward_model(
+def get_general_preference_model(
     model_name_or_path: str,
     *,
     bf16=True,
@@ -56,7 +56,8 @@ def get_reward_model(
     # https://huggingface.co/docs/transformers/main_classes/deepspeed#nontrainer-deepspeed-integration
     
     if ds_config is not None and ds_config["zero_optimization"]["stage"] == 3:
-        dschf = HfDeepSpeedConfig(ds_config)
+        # dschf = HfDeepSpeedConfig(ds_config)
+        ds_config = None
     else:
         dschf = None
 
