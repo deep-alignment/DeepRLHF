@@ -37,7 +37,11 @@ source ./sc_venv_template_hydra/activate.sh
 readonly training_script="scripts/train_rm_llama.sh" 
 source ./${training_script} slurm
 
-srun --cpu_bind=none bash -c "torchrun \
---nnodes=$SLURM_NNODES \
---rdzv_backend c10d --nproc_per_node=4 --node_rank $SLURM_PROCID --rdzv_id $RANDOM --rdzv_endpoint=$MASTER_ADDR:$MASTER_PORT --rdzv_conf=is_host=\$(if ((SLURM_NODEID)); then echo 0; else echo 1; fi) \
- --module ${training_commands}  "
+torchrun \
+  --nnodes=$SLURM_NNODES \
+  --nproc_per_node=4 \
+  --rdzv_backend=c10d \
+  --rdzv_endpoint=$MASTER_ADDR:$MASTER_PORT \
+  --rdzv_conf=is_host=$(if ((SLURM_NODEID)); then echo 0; else echo 1; fi) \
+  --node_rank=$SLURM_PROCID \
+  --module ${training_commands}
