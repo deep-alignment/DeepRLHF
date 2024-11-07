@@ -204,25 +204,6 @@ class GeneralPreferenceModelTrainer(ABC):
 
                 self.strategy.backward(loss, self.model, self.optimizer)
 
-                # Calculate gradient norm properly after backward pass
-                grad_norm = 0.0
-                for param in self.model.parameters():
-                    if param.grad is not None:
-                        grad_norm += (param.grad.data ** 2).sum().item()
-                grad_norm = grad_norm ** 0.5
-
-                # Add gradient clipping
-                if self.strategy.args.max_norm > 0:
-                    if hasattr(self.optimizer, "clip_grad_norm"):
-                        # Skip gradient clipping if already done by optimizer
-                        grad_was_clipped = True
-                    else:
-                        torch.nn.utils.clip_grad_norm_(
-                            self.model.parameters(), 
-                            self.strategy.args.max_norm
-                        )
-                        grad_was_clipped = True
-
                 # Optimizer step
                 self.strategy.optimizer_step(self.optimizer, self.model, self.scheduler)
 
@@ -238,8 +219,7 @@ class GeneralPreferenceModelTrainer(ABC):
                     "loss_mean": loss_mean,
                     "lr": self.scheduler.get_last_lr()[0],  # Add learning rate to logs
                     "acc": acc,
-                    "acc_mean": acc_mean,
-                    "grad_norm": grad_norm,  # Add gradient norm to logs
+                    "acc_mean": acc_mean
                 }
 
                 # logs/checkpoints/evaluation
