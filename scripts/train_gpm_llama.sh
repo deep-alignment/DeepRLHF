@@ -22,8 +22,6 @@ openrlhf.cli.train_gpm \
    --add_pretrain_loss \
    --ptx_loss_coef 0.00 \
    --is_general_preference \
-   --return_prompt_length \
-   --add_prompt_head \
    --is_preference_embedding_normalized \
    --train_split_ratio 1.0 \
    --save_best_model 2 \
@@ -41,6 +39,8 @@ EOF
      # --use_wandb [WANDB_TOKENS] or True (use wandb login command)
      # --packing_samples
      # --load_checkpoint
+     # --return_prompt_length \
+     # --add_prompt_head \
 
 
 if [[ ${1} != "slurm" ]]; then

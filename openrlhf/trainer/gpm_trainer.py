@@ -360,15 +360,13 @@ class GeneralPreferenceModelTrainer(ABC):
             chosen_rewards = all_values[: chosen_ids.shape[0]]
             rejected_rewards = all_values[chosen_ids.shape[0] :]
         else:
-            # Handle packed samples
+            # Handle packed samples without passing packed_seq_lens
             all_values, outputs = model.custom_forward(
                 chosen_ids, 
                 attention_mask=c_mask,
-                return_output=return_output,
-                ring_attn_group=self.strategy.ring_attn_group,
-                packed_seq_lens=reject_ids  # Using reject_ids to store packed_seq_lens
+                return_output=return_output
             )
-            half_len = len(reject_ids) // 2  # Using reject_ids as packed_seq_lens
+            half_len = len(reject_ids) // 2
             chosen_rewards = all_values[:half_len]
             rejected_rewards = all_values[half_len:]
 
