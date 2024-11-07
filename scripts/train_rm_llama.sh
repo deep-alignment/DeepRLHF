@@ -1,7 +1,7 @@
 set -x
 
 read -r -d '' training_commands <<EOF
-openrlhf.cli.train_rm \
+openrlhf.cli.train_gpm \
    --save_path ./checkpoint/Llama-3.2-3B-Instruct-RM \
    --save_steps -1 \
    --logging_steps 1 \
