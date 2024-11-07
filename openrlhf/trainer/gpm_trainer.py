@@ -111,47 +111,52 @@ class GeneralPreferenceModelTrainer(ABC):
             wandb.define_metric("eval/global_step")
             wandb.define_metric("eval/*", step_metric="eval/global_step", step_sync=True)
 
-    def fit(self, args):
+    def fit(self, args, consumed_samples=0, num_update_steps_per_epoch=None):
         # get eval and save steps
         if args.eval_steps == -1:
-            args.eval_steps = self.train_dataloader.__len__()  # Evaluate once per epoch
+            args.eval_steps = num_update_steps_per_epoch  # Evaluate once per epoch
         if args.save_steps == -1:
             args.save_steps = float("inf")  # do not save ckpt
 
-        eval_loss_minimum = None
-        global_step = 1
-        epoch_bar = tqdm(range(self.epochs), desc="Train epoch", disable=not self.strategy.is_rank_0())
-        for epoch in range(self.epochs):
+        # Restore step and start_epoch
+        step = consumed_samples // args.train_batch_size * self.strategy.accumulated_gradient + 1
+        start_epoch = consumed_samples // args.train_batch_size // num_update_steps_per_epoch
+        consumed_samples = consumed_samples % (num_update_steps_per_epoch * args.train_batch_size)
+
+        epoch_bar = tqdm(range(start_epoch, self.epochs), desc="Train epoch", disable=not self.strategy.is_rank_0())
+        for epoch in range(start_epoch, self.epochs):
+            if isinstance(self.train_dataloader.sampler, GroupDistributedSampler):
+                self.train_dataloader.sampler.set_epoch(
+                    epoch, consumed_samples=0 if epoch > start_epoch else consumed_samples
+                )
+
             #  train
             step_bar = tqdm(
                 range(self.train_dataloader.__len__()),
                 desc="Train step of epoch %d" % epoch,
                 disable=not self.strategy.is_rank_0(),
             )
-                
-            if isinstance(self.train_dataloader.sampler, GroupDistributedSampler):
-                self.train_dataloader.sampler.set_epoch(epoch)
 
             self.model.train()
             loss_mean = 0
-           
+
             for chosen_ids, c_mask, reject_ids, r_mask, margin, chosen_response_len in self.train_dataloader:
                 chosen_ids = chosen_ids.squeeze(1).to(torch.cuda.current_device())
                 c_mask = c_mask.squeeze(1).to(torch.cuda.current_device())
                 reject_ids = reject_ids.squeeze(1).to(torch.cuda.current_device())
                 r_mask = r_mask.squeeze(1).to(torch.cuda.current_device())
                 chosen_response_len = torch.tensor(chosen_response_len).view(-1, 1).to(torch.cuda.current_device())
-                
+
                 if self.margin_loss:
                     margin = torch.tensor(margin).to(torch.cuda.current_device())
                 else:
                     margin = None
-                
+
                 return_output = True if isinstance(self.loss_fn, HighDimGeneralPreferenceRegressionMoELoss) or isinstance(self.loss_fn, HighDimGeneralPreferenceMoELoss) else False
                 chosen_reward, reject_reward, outputs = self.concatenated_forward(
                     self.model, chosen_ids, c_mask, reject_ids, r_mask, return_output
                 )
-                # loss function
+
                 if self.compute_fp32_loss:
                     chosen_reward = chosen_reward.float()
                     reject_reward = reject_reward.float()
@@ -164,7 +169,7 @@ class GeneralPreferenceModelTrainer(ABC):
                     preference_loss, prob = self.loss_fn(chosen_reward, reject_reward, prompt_hidden_state.to(torch.cuda.current_device()), margin)
                 else:
                     preference_loss, prob = self.loss_fn(chosen_reward, reject_reward, margin)
-                
+
                 if args.add_pretrain_loss:
                     if isinstance(self.ptx_loss_fn, DPORefFreeLoss):
                         chosen_output = self.model.forward(chosen_ids, attention_mask=c_mask)
@@ -191,93 +196,56 @@ class GeneralPreferenceModelTrainer(ABC):
                         ).to(torch.cuda.current_device())
                         ptx_log_probs = ptx_output["logits"]
                         chosen_reward_ptx_loss = self.ptx_loss_fn(ptx_log_probs, ptx_label, c_mask.bool())
-                    
+
                     loss = (1 - args.ptx_loss_coef) * preference_loss + chosen_reward_ptx_loss * args.ptx_loss_coef
                 else:
                     loss = preference_loss
 
-                
                 self.strategy.backward(loss, self.model, self.optimizer)
                 
-                self.strategy.optimizer_step(self.optimizer, self.model, self.scheduler)
-                
                 loss_mean = loss_mean * 0.9 + 0.1 * preference_loss.item()
-                
+
                 logs_dict = {
                     "preference_loss": preference_loss.item(),
                     "prob": prob.item(),
                     "loss_mean": loss_mean,
+                    "lr": self.scheduler.get_last_lr()[0],
                 }
-                    
-                # logs/checkpoints/evaluate
-                eval_loss_minimum = self.save_logs_and_checkpoints(args, global_step, step_bar, eval_loss_minimum, logs_dict)
-                torch.distributed.barrier()
+
+                # logs/checkpoints/evaluation
+                if step % self.strategy.accumulated_gradient == 0:
+                    global_step = step // self.strategy.accumulated_gradient
+                    client_states = {"consumed_samples": global_step * args.train_batch_size}
+                    self.save_logs_and_checkpoints(args, global_step, step_bar, logs_dict, client_states)
+
+                step += 1
                 step_bar.update()
-                global_step += 1
-                
+
             epoch_bar.update()
 
         if self._wandb is not None and self.strategy.is_rank_0():
             self._wandb.finish()
 
-    # logs/checkpoints/evaluate
-    def save_logs_and_checkpoints(self, args, global_step, step_bar, eval_loss_minimum, logs_dict={}):
+    def save_logs_and_checkpoints(self, args, global_step, step_bar, logs_dict={}, client_states={}):
         if global_step % args.logging_steps == 0:
             # step bar
             logs_dict = self.strategy.all_reduce(logs_dict)
             step_bar.set_postfix(logs_dict)
             # wandb
-            if (
-                self._wandb is not None
-                and self.strategy.is_rank_0()
-                and global_step % self.strategy.accumulated_gradient == 0
-            ):
+            if self._wandb is not None and self.strategy.is_rank_0():
                 logs = {"train/%s" % k: v for k, v in {**logs_dict, "global_step": global_step}.items()}
                 self._wandb.log(logs)
-        # eval
-        if global_step % args.eval_steps == 0 and self.eval_dataloader:
-            try:
-                eval_loss = self.evaluate(self.eval_dataloader, global_step)      
-                torch.distributed.barrier()
-            except Exception as e:
-                self.strategy.print(f"Error during evaluation: {str(e)}")
-                raise
-            if args.save_best_model:
-                save_path = os.path.join(args.save_path, f"step_{global_step}")
-                if eval_loss_minimum is None or eval_loss < eval_loss_minimum:
-                    try:
-                        self.strategy.save_model(self.model, self.tokenizer, save_path)
-                        eval_loss_minimum = eval_loss
-                    except Exception as e:
-                        self.strategy.print(f"Error during saving model: {str(e)}")
-                        raise
-                    try:
-                        if self.strategy.is_rank_0():  
-                            self.clean_old_checkpoints(args.save_path, args.save_best_model) 
-                    except Exception as e:
-                        self.strategy.print(f"Error during deleting old checkpoint: {str(e)}")
-                        raise
-                                     
-        # save ckpt
-        # TODO: save best model on dev, use loss/perplexity on whole dev dataset as metric
-        if global_step % args.save_steps == 0:
-            tag = f"global_step_{global_step}"
-            # self.strategy.save_ckpt(self.model, args.ckpt_path, tag, args.max_ckpt_num, args.max_ckpt_mem)
-            self.strategy.save_model(self.model, self.tokenizer, os.path.join(args.save_path, tag))
-            
-        if self.strategy.is_rank_0():  
-            return eval_loss_minimum
-    
-    def clean_old_checkpoints(self, output_dir, max_checkpoints=3): 
-        subdirs = [d for d in os.listdir(output_dir) if os.path.isdir(os.path.join(output_dir, d)) and d.startswith('step_')] # If the number of directories exceeds max_checkpoints, delete the oldest one 
-        if len(subdirs) > max_checkpoints: 
-            subdirs.sort(key=lambda x: int(x.split('_')[1])) 
-            dir_to_delete = os.path.join(output_dir, subdirs[0]) 
-            try:
-                shutil.rmtree(dir_to_delete) 
-            except Exception as e:
-                print(f"Error deleting old checkpoint{dir_to_delete}: {e}")
 
+        # eval
+        if global_step % args.eval_steps == 0:
+            self.evaluate(self.eval_dataloader, global_step)
+
+        # save ckpt
+        if global_step % args.save_steps == 0:
+            tag = f"global_step{global_step}"
+            self.strategy.save_ckpt(
+                self.model, args.ckpt_path, tag, args.max_ckpt_num, args.max_ckpt_mem, client_states
+            )
 
     def evaluate(self, eval_dataloader, steps=0):
         step_bar = tqdm(
