@@ -52,7 +52,7 @@ class GeneralPreferenceModelTrainer(ABC):
         self.model = model
         self.train_dataloader = train_dataloader
         self.eval_dataloader = eval_dataloader
-        self.scheduler = scheduler
+        self.scheduler = scheduler  # Add scheduler here
         self.optimizer = optim
         self.tokenizer = tokenizer
         self.args = strategy.args
@@ -203,7 +203,8 @@ class GeneralPreferenceModelTrainer(ABC):
                     loss = preference_loss
 
                 self.strategy.backward(loss, self.model, self.optimizer)
-                
+                self.strategy.optimizer_step(self.optimizer, self.model, self.scheduler)  # Add scheduler here
+
                 # Add accuracy calculation
                 with torch.no_grad():
                     acc = (chosen_reward > reject_reward).float().mean().item()
@@ -214,7 +215,7 @@ class GeneralPreferenceModelTrainer(ABC):
                 logs_dict = {
                     "loss": preference_loss.item(),
                     "loss_mean": loss_mean,
-                    "lr": self.scheduler.get_last_lr()[0],
+                    "lr": self.scheduler.get_last_lr()[0],  # Add learning rate to logs
                     "acc": acc,
                     "acc_mean": acc_mean,
                 }
