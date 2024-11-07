@@ -45,60 +45,60 @@ def train(args):
     )
 
     # prepare for data and dataset
+    total_data = blending_datasets(
+        args.dataset,
+        args.dataset_probs,
+        strategy,
+        args.seed,
+        max_count=5000000,
+        stopping_strategy="all_exhausted",
+        return_eval=False
+    )
+    total_data_length = min(args.max_samples, len(total_data))
+
     if args.train_split_ratio < 1:
-        total_data = blending_datasets(
-            args.dataset,
-            args.dataset_probs,
-            strategy,
-            args.seed,
-            max_count=5000000,
-            stopping_strategy="all_exhausted",
-            return_eval=False
-        )
-        total_data_length = min(args.max_samples, len(total_data))
-        train_data = total_data.select(range(int(total_data_length * args.train_split_ratio)))
-        eval_data = total_data.select(range(int(total_data_length * args.train_split_ratio), total_data_length))
+        split_index = int(total_data_length * args.train_split_ratio)
+        train_data = total_data.select(range(split_index))
+        eval_data = total_data.select(range(split_index, total_data_length))
     else:
-        train_data, eval_data = blending_datasets(
-            args.dataset,
-            args.dataset_probs,
+        train_data = total_data
+        eval_data = None
+
+    train_dataset = GeneralRewardDataset(
+        train_data,
+        tokenizer,
+        args.max_len,
+        strategy,
+        is_custom=args.is_custom_dataset,
+        return_prompt_length=args.return_prompt_length
+    )
+    train_dataloader = strategy.setup_dataloader(
+        train_dataset,
+        args.micro_train_batch_size,
+        True,
+        True,
+        train_dataset.collate_fn,
+        group_size=args.group_size,
+    )
+
+    if eval_data is not None and len(eval_data) > 0:
+        eval_dataset = GeneralRewardDataset(
+            eval_data,
+            tokenizer,
+            args.max_len,
             strategy,
-            args.seed,
-            max_count=5000000,
-            stopping_strategy="all_exhausted"
+            is_custom=args.is_custom_dataset,
+            return_prompt_length=args.return_prompt_length
         )
-        total_data_length = min(args.max_samples, len(train_data))
-        train_data = train_data.select(range(total_data_length))
-        
-    if args.train_split_ratio < 1:
-        train_dataset = GeneralRewardDataset(train_data, tokenizer, args.max_len, strategy, is_custom=args.is_custom_dataset, return_prompt_length=args.return_prompt_length)
-        train_dataloader = strategy.setup_dataloader(
-            train_dataset,
+        eval_dataloader = strategy.setup_dataloader(
+            eval_dataset,
             args.micro_train_batch_size,
             True,
-            True,
-            train_dataset.collate_fn,
-            group_size=args.group_size, 
+            False,
+            eval_dataset.collate_fn
         )
-        if len(eval_data) != 0:
-            eval_dataset = GeneralRewardDataset(eval_data, tokenizer, args.max_len, strategy, is_custom=args.is_custom_dataset, return_prompt_length=args.return_prompt_length)
-            eval_dataloader = strategy.setup_dataloader(
-                eval_dataset, args.micro_train_batch_size, True, False, eval_dataset.collate_fn
-            )
-        else:
-            eval_dataloader=None
-            strategy.print("No separate validation data split was detected. The entire dataset will be utilized for training.")
     else:
-        train_dataset = GeneralRewardDataset(total_data, tokenizer, args.max_len, strategy, is_custom=args.is_custom_dataset, return_prompt_length=args.return_prompt_length)
-        train_dataloader = strategy.setup_dataloader(
-            train_dataset,
-            args.micro_train_batch_size,
-            True,
-            True,
-            train_dataset.collate_fn,
-            group_size=args.group_size, 
-        )
-        eval_dataloader=None
+        eval_dataloader = None
         strategy.print("No separate validation data split was detected. The entire dataset will be utilized for training.")
         
     # scheduler
