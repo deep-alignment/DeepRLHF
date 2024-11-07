@@ -4,7 +4,7 @@ import shutil
 from abc import ABC
 from collections import defaultdict
 from datetime import timedelta
-from typing import List, Tuple, Union
+from typing import List, Tuple, Union, Optional
 
 import deepspeed
 import numpy as np
@@ -149,21 +149,37 @@ class DeepspeedStrategy(ABC):
         collate_fn=None,
         drop_last=True,
         sampler=None,
+        group_size: Optional[int]=None,
         consumed_samples=0,
     ):
         # DDP only mode, replay buffers on each rank are different.
         if sampler is None:
-            num_replicas = dist.get_world_size() // self.ring_attn_size
-            rank = dist.get_rank() // self.ring_attn_size
-            sampler = DistributedSampler(
-                replay_buffer,
-                num_replicas=num_replicas,
-                rank=rank,
-                shuffle=shuffle,
-                seed=self.seed,
-                drop_last=drop_last,
-                consumed_samples=consumed_samples,
-            )
+            if not group_size:
+                num_replicas = dist.get_world_size() // self.ring_attn_size
+                rank = dist.get_rank() // self.ring_attn_size
+                sampler = DistributedSampler(
+                    replay_buffer,
+                    num_replicas=num_replicas,
+                    rank=rank,
+                    shuffle=shuffle,
+                    seed=self.seed,
+                    drop_last=drop_last,
+                    consumed_samples=consumed_samples,
+                )
+            else:
+                from .import GroupDistributedSampler
+                num_replicas = dist.get_world_size() // self.ring_attn_size
+                rank = dist.get_rank() // self.ring_attn_size
+                sampler = GroupDistributedSampler(
+                    replay_buffer,
+                    num_replicas=num_replicas,
+                    rank=rank,
+                    shuffle=shuffle,
+                    seed=self.seed,
+                    drop_last=drop_last,
+                    consumed_samples=consumed_samples,
+                    group_size=group_size,
+                )
 
         return DataLoader(
             replay_buffer,
