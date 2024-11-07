@@ -247,6 +247,7 @@ if __name__ == "__main__":
     parser.add_argument("--chosen_key", type=str, default="chosen")
     parser.add_argument("--rejected_key", type=str, default="rejected")
     parser.add_argument("--prompt_key", type=str, default=None)
+    parser.add_argument("--job_id", type=str, default="", help="Job ID for wandb run name")
 
     args = parser.parse_args()
     train(args)

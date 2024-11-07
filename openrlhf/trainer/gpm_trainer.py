@@ -101,7 +101,7 @@ class GeneralPreferenceModelTrainer(ABC):
                 entity=strategy.args.wandb_org,
                 project=strategy.args.wandb_project,
                 group=strategy.args.wandb_group,
-                name="GPM_M_" + str(strategy.args.pretrain) + "_D_" + str(strategy.args.dataset) + "_" + "mbs" + str(strategy.args.micro_train_batch_size) + "_" + str(strategy.args.max_epochs) + "epoch" + "_" + str(strategy.args.wandb_run_name),
+                name="GPM_M_" + str(strategy.args.pretrain) + "_D_" + str(strategy.args.dataset) + "_" + "mbs" + str(strategy.args.micro_train_batch_size) + "_" + str(strategy.args.max_epochs) + "epoch" + "_" + str(strategy.args.job_id) + "_" + str(strategy.args.wandb_run_name),
                 config=strategy.args.__dict__,
                 reinit=True,
             )
@@ -138,6 +138,7 @@ class GeneralPreferenceModelTrainer(ABC):
             )
 
             self.model.train()
+            acc_mean = 0
             loss_mean = 0
 
             for chosen_ids, c_mask, reject_ids, r_mask, margin, chosen_response_len in self.train_dataloader:
@@ -203,13 +204,19 @@ class GeneralPreferenceModelTrainer(ABC):
 
                 self.strategy.backward(loss, self.model, self.optimizer)
                 
-                loss_mean = loss_mean * 0.9 + 0.1 * preference_loss.item()
+                # Add accuracy calculation
+                with torch.no_grad():
+                    acc = (chosen_reward > reject_reward).float().mean().item()
+                    acc_mean = acc_mean * 0.9 + 0.1 * acc
+                    loss_mean = loss_mean * 0.9 + 0.1 * preference_loss.item()
 
+                # Update logs_dict to include the new metrics
                 logs_dict = {
-                    "preference_loss": preference_loss.item(),
-                    "prob": prob.item(),
+                    "loss": preference_loss.item(),
                     "loss_mean": loss_mean,
                     "lr": self.scheduler.get_last_lr()[0],
+                    "acc": acc,
+                    "acc_mean": acc_mean,
                 }
 
                 # logs/checkpoints/evaluation

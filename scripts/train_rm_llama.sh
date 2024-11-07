@@ -23,7 +23,8 @@ openrlhf.cli.train_rm \
    --load_checkpoint \
    --gradient_checkpointing \
    --use_wandb True \
-   --wandb_project deeprlhf-rm
+   --wandb_project deeprlhf-rm \
+   --job_id ${SLURM_JOB_ID:-"local"}
 EOF
      # --use_wandb [WANDB_TOKENS] or True (use wandb login command)
      # --packing_samples

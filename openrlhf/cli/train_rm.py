@@ -230,6 +230,7 @@ if __name__ == "__main__":
         type=str,
         default="rm_%s" % datetime.now().strftime("%m%dT%H:%M"),
     )
+    parser.add_argument("--job_id", type=str, default="", help="Job ID for wandb run name")
 
     # TensorBoard parameters
     parser.add_argument("--use_tensorboard", type=str, default=None, help="TensorBoard logging path")
