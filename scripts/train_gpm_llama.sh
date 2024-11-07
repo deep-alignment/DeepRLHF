@@ -24,7 +24,7 @@ openrlhf.cli.train_gpm \
    --is_general_preference \
    --return_prompt_length \
    --add_prompt_head \
-   --is_preference_embedding_normalized \ 
+   --is_preference_embedding_normalized \
    --train_split_ratio 1.0 \
    --save_best_model 2 \
    --dataset Skywork/Skywork-Reward-Preference-80K-v0.2 \
