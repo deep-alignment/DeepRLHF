@@ -3,6 +3,7 @@ import math
 import os
 from datetime import datetime
 from transformers.trainer import get_scheduler
+
 from openrlhf.datasets import GeneralRewardDataset
 from openrlhf.models import get_general_preference_model
 from openrlhf.trainer import GeneralPreferenceModelTrainer
@@ -39,7 +40,9 @@ def train(args):
     strategy.print(model)
 
     # configure optimizer
-    optim = strategy.create_optimizer(model, lr=args.learning_rate, betas=(0.9, 0.95), weight_decay=args.l2)
+    optim = strategy.create_optimizer(
+        model, lr=args.learning_rate, betas=args.adam_betas, weight_decay=args.l2
+    )
 
     # prepare for data and dataset
     total_data = blending_datasets(
@@ -86,14 +89,15 @@ def train(args):
         strategy.print("No separate validation data split was detected. The entire dataset will be utilized for training.")
         
     # scheduler
-    num_update_steps_per_epoch = len(train_dataloader) // strategy.accumulated_gradient
+    num_update_steps_per_epoch = len(train_dataset) // args.train_batch_size
     max_steps = math.ceil(args.max_epochs * num_update_steps_per_epoch)
 
     scheduler = get_scheduler(
-        "cosine", #### "cosine"  "constant"
+        "cosine_with_min_lr",
         optim,
         num_warmup_steps=math.ceil(max_steps * 0.03),
         num_training_steps=max_steps,
+        scheduler_specific_kwargs={"min_lr": args.learning_rate * 0.1},
     )
 
     # gradient_checkpointing
@@ -200,6 +204,18 @@ if __name__ == "__main__":
         "--wandb_run_name",
         type=str,
         default="rm_%s" % datetime.now().strftime("%m%dT%H:%M"),
+    )
+
+    # Add args.train_batch_size and args.adam_betas
+    parser.add_argument(
+        "--train_batch_size", type=int, default=128, help="Global training batch size"
+    )
+    parser.add_argument(
+        "--adam_betas",
+        type=float,
+        nargs=2,
+        default=(0.9, 0.95),
+        help="Betas for Adam optimizer",
     )
 
     args = parser.parse_args()
