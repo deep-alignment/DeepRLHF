@@ -313,65 +313,41 @@ class GeneralRewardDataset(Dataset):
     def __getitem__(self, idx):
         prompt, chosen, reject, margin = self.prompts[idx], self.chosens[idx], self.rejects[idx], self.margins[idx]
 
-        if prompt:
-            chosen = prompt + ' ' + chosen + ' ' + self.tokenizer.eos_token
-            reject = prompt + ' ' + reject + ' ' + self.tokenizer.eos_token
-        else:
-            if self.tokenizer.chat_template is not None:
-                if self.return_prompt_length:
-                    prompt = self.tokenizer.apply_chat_template([chosen[0]], tokenize=False)
-                chosen = self.tokenizer.apply_chat_template(chosen, tokenize=False)
-                reject = self.tokenizer.apply_chat_template(reject, tokenize=False)
-            else:
-                if self.return_prompt_length:
-                    prompt = chosen[0]['content']
-                chosen = ' '.join([d['content'] for d in chosen]) + ' ' + self.tokenizer.eos_token
-                reject = ' '.join([d['content'] for d in reject]) + ' ' + self.tokenizer.eos_token
-
+        chosen = (prompt + chosen).rstrip("\n")
+        if not chosen.endswith(self.tokenizer.eos_token):
+            chosen += " " + self.tokenizer.eos_token
         chosen_token = self.tokenizer(
             chosen,
             max_length=self.max_length,
             padding=False,
             truncation=True,
             return_tensors="pt",
+            add_special_tokens=False,
         )
-        #### You may consider removing an additional bos for Llama3.1 8b Instruct
-        # if not self.is_custom and self.tokenizer.chat_template is not None and self.tokenizer.bos_token_id == 128000:
-        #     chosen_token["input_ids"] = chosen_token["input_ids"][:, 1:]
-        #     chosen_token["attention_mask"] = chosen_token["attention_mask"][:, 1:]
+
+        reject = (prompt + reject).rstrip("\n")
+        if not reject.endswith(self.tokenizer.eos_token):
+            reject += " " + self.tokenizer.eos_token
         reject_token = self.tokenizer(
             reject,
             max_length=self.max_length,
             padding=False,
             truncation=True,
             return_tensors="pt",
+            add_special_tokens=False,
         )
-        #### You may consider removing an additional bos for Llama3.1 8b Instruct
-        # if not self.is_custom and self.tokenizer.chat_template is not None and self.tokenizer.bos_token_id == 128000:
-        #     reject_token["input_ids"] = reject_token["input_ids"][:, 1:]
-        #     reject_token["attention_mask"] = reject_token["attention_mask"][:, 1:]
-        if self.return_prompt_length:
-            prompt_token = self.tokenizer(
-                prompt,
-                max_length=self.max_length,
-                padding=False,
-                truncation=True,
-                return_tensors="pt",
-            )
-            #### You may consider removing an additional bos for Llama3.1 8b Instruct
-            # if not self.is_custom and self.tokenizer.chat_template is not None and self.tokenizer.bos_token_id == 128000:
-            #     prompt_token["input_ids"] = prompt_token["input_ids"][:, 1:]
-            #     prompt_token["attention_mask"] = prompt_token["attention_mask"][:, 1:]
-            chosen_response_len = chosen_token["attention_mask"].sum() - prompt_token["attention_mask"].sum()
-        else:
-            chosen_response_len = 0
 
         # To avoid EOS_token truncation
         chosen_token["input_ids"][0][-1] = self.tokenizer.eos_token_id
         reject_token["input_ids"][0][-1] = self.tokenizer.eos_token_id
         chosen_token["attention_mask"][0][-1] = True
         reject_token["attention_mask"][0][-1] = True
-        
+
+        if self.return_prompt_length:
+            chosen_response_len = chosen_token["attention_mask"].sum() - len(prompt.split())
+        else:
+            chosen_response_len = 0
+
         return (
             chosen_token["input_ids"],
             chosen_token["attention_mask"],

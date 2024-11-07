@@ -92,6 +92,7 @@ class GeneralPreferenceModelTrainer(ABC):
 
         self.margin_loss = self.strategy.args.margin_loss
         self.compute_fp32_loss = self.strategy.args.compute_fp32_loss
+        self.packing_samples = strategy.args.packing_samples
 
         self._wandb = None
         if self.strategy.args.use_wandb and self.strategy.is_rank_0():
