@@ -227,7 +227,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--wandb_run_name",
         type=str,
-        default="rm_%s" % datetime.now().strftime("%m%dT%H:%M"),
+        default="gpm_%s" % datetime.now().strftime("%m%dT%H:%M"),
     )
 
     # Add args.train_batch_size and args.adam_betas
