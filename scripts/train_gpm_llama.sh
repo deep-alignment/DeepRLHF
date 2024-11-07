@@ -15,12 +15,12 @@ openrlhf.cli.train_gpm \
    --zero_stage 3 \
    --learning_rate 2e-6 \
    --l2 1e-3 \
-   --general_preference_tau 1 \
+   --general_preference_tau 0.1 \
    --dataset_probs 1 \
    --group_size 1 \
    --value_head_dim 2 \
    --add_pretrain_loss \
-   --ptx_loss_coef 0.01 \
+   --ptx_loss_coef 0.00 \
    --is_general_preference \
    --train_split_ratio 1.0 \
    --save_best_model 2 \

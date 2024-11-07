@@ -203,6 +203,14 @@ class GeneralPreferenceModelTrainer(ABC):
                     loss = preference_loss
 
                 self.strategy.backward(loss, self.model, self.optimizer)
+                
+                # Calculate gradient norm before optimizer step
+                grad_norm = 0.0
+                for param in self.model.parameters():
+                    if param.grad is not None:
+                        grad_norm += param.grad.data.norm(2).item() ** 2
+                grad_norm = grad_norm ** 0.5
+
                 self.strategy.optimizer_step(self.optimizer, self.model, self.scheduler)  # Add scheduler here
 
                 # Add accuracy calculation
@@ -218,6 +226,7 @@ class GeneralPreferenceModelTrainer(ABC):
                     "lr": self.scheduler.get_last_lr()[0],  # Add learning rate to logs
                     "acc": acc,
                     "acc_mean": acc_mean,
+                    "grad_norm": grad_norm,  # Add gradient norm to logs
                 }
 
                 # logs/checkpoints/evaluation
