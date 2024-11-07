@@ -5,7 +5,7 @@ openrlhf.cli.train_gpm \
    --save_path ./checkpoint/Llama-3.2-3B-Instruct-GPM \
    --save_steps -1 \
    --logging_steps 1 \
-   --eval_steps 10 \
+   --eval_steps -1 \
    --train_batch_size 128 \
    --micro_train_batch_size 8 \
    --pretrain meta-llama/Llama-3.2-3B-Instruct \
