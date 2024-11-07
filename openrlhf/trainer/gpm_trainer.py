@@ -209,8 +209,10 @@ class GeneralPreferenceModelTrainer(ABC):
 
                 # Add accuracy calculation
                 with torch.no_grad():
-                    acc = prob.mean().item()
+                    acc = (prob > 0.5).float().mean().item()
                     acc_mean = acc_mean * 0.9 + 0.1 * acc
+                    prob = prob.mean().item()
+                    prob_mean = prob_mean * 0.9 + 0.1 * prob
                     loss_mean = loss_mean * 0.9 + 0.1 * preference_loss.item()
 
                 # Update logs_dict to include the new metrics
@@ -219,7 +221,9 @@ class GeneralPreferenceModelTrainer(ABC):
                     "loss_mean": loss_mean,
                     "lr": self.scheduler.get_last_lr()[0],  # Add learning rate to logs
                     "acc": acc,
-                    "acc_mean": acc_mean
+                    "acc_mean": acc_mean,
+                    "prob": prob,
+                    "prob_mean": prob_mean,
                 }
 
                 # logs/checkpoints/evaluation
