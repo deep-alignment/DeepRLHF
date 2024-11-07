@@ -122,8 +122,12 @@ def train(args):
     # strategy prepare
     (model, optim, scheduler) = strategy.prepare((model, optim, scheduler))
 
-    if args.load_checkpoint:
-        strategy.print("Load checkpoint: ", args.save_path)
+    # load checkpoint
+    consumed_samples = 0
+    if args.load_checkpoint and os.path.exists(args.ckpt_path):
+        _, states = strategy.load_ckpt(model, args.ckpt_path)
+        consumed_samples = states["consumed_samples"]
+        strategy.print(f"Loaded the checkpoint: {args.ckpt_path}, consumed_samples: {consumed_samples}")
 
     os.makedirs(args.save_path, exist_ok=True)
 
@@ -150,7 +154,7 @@ def train(args):
         strategy.print("Skipping evaluation due to empty eval_dataloader.")
 
     # Proceed with training
-    trainer.fit(args)
+    trainer.fit(args, consumed_samples, num_update_steps_per_epoch)
 
     # save model checkpoint after fitting on only rank0
     strategy.save_model(model, tokenizer, args.save_path)
