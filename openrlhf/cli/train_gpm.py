@@ -135,6 +135,7 @@ def train(args):
         optim=optim,
         tokenizer=tokenizer,
         train_dataloader=train_dataloader,
+        eval_dataloader=eval_dataloader,
         scheduler=scheduler,
         max_epochs=args.max_epochs,
         is_general_preference=args.is_general_preference,
