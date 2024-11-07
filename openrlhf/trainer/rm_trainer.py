@@ -82,7 +82,7 @@ class RewardModelTrainer(ABC):
                 entity=strategy.args.wandb_org,
                 project=strategy.args.wandb_project,
                 group=strategy.args.wandb_group,
-                name="RM_M_" + str(strategy.args.pretrain) + "_D_" + str(strategy.args.dataset) + "_" + "mbs" + str(strategy.args.micro_train_batch_size) + "_" + str(strategy.args.max_epochs) + "epoch" + "_" + str(strategy.args.job_id) + "_" + str(strategy.args.wandb_run_name),
+                name="RM_M_" + str(strategy.args.pretrain) + "_D_" + str(strategy.args.dataset) + "_" + "mbs" + str(strategy.args.micro_train_batch_size) + "_" + str(strategy.args.max_epochs) + "epoch" + "_jobid_" + str(strategy.args.job_id) + "_" + str(strategy.args.wandb_run_name),
                 config=strategy.args.__dict__,
                 reinit=True,
             )
