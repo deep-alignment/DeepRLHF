@@ -135,7 +135,6 @@ def train(args):
         optim=optim,
         tokenizer=tokenizer,
         train_dataloader=train_dataloader,
-        eval_dataloader=eval_dataloader,
         scheduler=scheduler,
         max_epochs=args.max_epochs,
         is_general_preference=args.is_general_preference,
@@ -143,6 +142,13 @@ def train(args):
         value_head_dim=args.value_head_dim,
     )
 
+    # Only assign eval_dataloader if it exists and has data
+    if eval_dataloader is not None and len(eval_dataset) > 0:
+        trainer.eval_dataloader = eval_dataloader
+    else:
+        strategy.print("Skipping evaluation due to empty eval_dataloader.")
+
+    # Proceed with training
     trainer.fit(args)
 
     # save model checkpoint after fitting on only rank0
