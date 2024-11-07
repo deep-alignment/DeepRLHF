@@ -32,7 +32,6 @@ openrlhf.cli.train_gpm \
    --chosen_key chosen \
    --rejected_key rejected \
    --flash_attn \
-   --packing_samples \
    --gradient_checkpointing \
    --use_wandb True \
    --wandb_project deeprlhf-rm \
