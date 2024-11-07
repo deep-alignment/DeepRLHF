@@ -16,6 +16,7 @@ def preprocess_data(
     rejected_key="rejected",
     apply_chat_template=None,
     is_dpo=False,
+    is_custom=False,
 ) -> str:
     if apply_chat_template:
         if prompt_key:
