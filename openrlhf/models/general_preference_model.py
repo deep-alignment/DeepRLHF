@@ -170,8 +170,6 @@ def _get_general_preference_model(base_causal_model, base_llm_model, is_general_
                 if self.training:
                     reward = values[:, -1, :]
                     # reward =  F.normalize(reward, p=2, dim=-1)  # Shape will be [batch_size, value_head_dim]
-                    # if not hasattr(self, 'prompt_head'):
-                    #     reward = F.normalize(reward, p=2, dim=-1) 
                 else:
                     eos_indices = attention_mask.size(1) - 1 - attention_mask.long().fliplr().argmax(dim=1)
                     eos_indices = eos_indices.unsqueeze(1)  # Change shape to [batch_size, 1]                  
@@ -180,8 +178,6 @@ def _get_general_preference_model(base_causal_model, base_llm_model, is_general_
                         reward_list.append(values[:,:,dim].gather(dim=1, index=eos_indices))
                     reward = torch.cat(reward_list, dim=1)
                     # reward =  F.normalize(reward, p=2, dim=-1)  # Shape will be [batch_size, value_head_dim]
-                    # if not hasattr(self, 'prompt_head'):
-                    #     reward =  F.normalize(reward, p=2, dim=-1)  # Shape will be [batch_size, value_head_dim]
                 if return_output:
                     return reward, outputs
                 else:
