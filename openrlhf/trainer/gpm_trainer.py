@@ -58,6 +58,9 @@ class GeneralPreferenceModelTrainer(ABC):
         self.args = strategy.args
         self.is_general_preference = is_general_preference
 
+        # Add packing samples flag
+        self.packing_samples = strategy.args.packing_samples
+
         if is_general_preference:
             if value_head_dim == 2 and not self.args.add_prompt_head:
                 self.loss_fn = GeneralPreferenceLoss(tau)
@@ -322,16 +325,26 @@ class GeneralPreferenceModelTrainer(ABC):
             return loss_mean
 
     def concatenated_forward(self, model, chosen_ids, c_mask, reject_ids, r_mask, return_output: bool = False):
-        """Run the given model on the given batch of inputs, concatenating the chosen and rejected inputs together.
-        """
-        input_ids, att_masks = self.concatenated_inputs(chosen_ids, c_mask, reject_ids, r_mask)
-        all_values, outputs = model.custom_forward(input_ids, attention_mask=att_masks, return_output=return_output)
-        chosen_rewards = all_values[: chosen_ids.shape[0]]
-        rejected_rewards = all_values[chosen_ids.shape[0] :]
-        
+        """Run the given model on concatenated inputs"""
+        if not self.packing_samples:
+            input_ids, att_masks = self.concatenated_inputs(chosen_ids, c_mask, reject_ids, r_mask)
+            all_values, outputs = model.custom_forward(input_ids, attention_mask=att_masks, return_output=return_output)
+            chosen_rewards = all_values[: chosen_ids.shape[0]]
+            rejected_rewards = all_values[chosen_ids.shape[0] :]
+        else:
+            # Handle packed samples
+            all_values, outputs = model.custom_forward(
+                chosen_ids, 
+                attention_mask=c_mask,
+                return_output=return_output,
+                ring_attn_group=self.strategy.ring_attn_group,
+                packed_seq_lens=reject_ids  # Using reject_ids to store packed_seq_lens
+            )
+            half_len = len(reject_ids) // 2  # Using reject_ids as packed_seq_lens
+            chosen_rewards = all_values[:half_len]
+            rejected_rewards = all_values[half_len:]
+
         return chosen_rewards, rejected_rewards, outputs
-    
-    
 
     def concatenated_inputs(self, chosen_ids, c_mask, reject_ids, r_mask):
         """Concatenate the chosen and rejected inputs into a single tensor.

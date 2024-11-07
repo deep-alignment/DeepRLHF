@@ -250,5 +250,18 @@ if __name__ == "__main__":
     parser.add_argument("--prompt_key", type=str, default=None)
     parser.add_argument("--job_id", type=str, default="", help="Job ID for wandb run name")
 
+    # Add packing samples argument
+    parser.add_argument("--packing_samples", action="store_true", default=False, help="Enable sample packing using Flash Attention2")
+    parser.add_argument("--ring_attn_size", type=int, default=1, help="Ring attention group size")
+    parser.add_argument("--ring_head_stride", type=int, default=1, help="Ring attention head stride")
+
     args = parser.parse_args()
+
+    if args.packing_samples and not args.flash_attn:
+        print("[Warning] Please --flash_attn to accelerate when --packing_samples is enabled.")
+        args.flash_attn = True
+
+    if args.ring_attn_size > 1:
+        assert args.packing_samples, "packing_samples must be enabled when using ring attention"
+
     train(args)

@@ -254,6 +254,7 @@ class GeneralRewardDataset(Dataset):
         strategy,
         is_custom=False,
         return_prompt_length=False,
+        multiple_of=1
     ) -> None:
         super().__init__()
         self.prompts = []
@@ -265,6 +266,7 @@ class GeneralRewardDataset(Dataset):
         self.max_length = max_length
         self.is_custom = is_custom
         self.return_prompt_length = return_prompt_length
+        self.multiple_of = multiple_of
 
         for data in tqdm(dataset, disable=not self.strategy.is_rank_0()):
             prompt, chosen, reject, margin = preprocess_data(data, is_custom=self.is_custom)
@@ -369,3 +371,38 @@ class GeneralRewardDataset(Dataset):
         reject_masks = zero_pad_sequences(reject_masks)
 
         return chosen_ids, chosen_masks, reject_ids, reject_masks, margins, chosen_response_lens
+
+    def packing_collate_fn(self, item_list):
+        extras = []
+        chosen_response_lens = []
+        
+        chosen_ids = []
+        chosen_att_masks = []
+        chosen_seq_lens = []
+        rejected_ids = []
+        rejected_att_masks = [] 
+        rejected_seq_lens = []
+        index = 1
+
+        for chosen_id, chosen_mask, reject_id, reject_mask, margin, chosen_response_len in item_list:
+            chosen_ids.append(chosen_id.flatten())
+            chosen_att_masks.append(torch.full_like(chosen_id.flatten(), index))
+            chosen_seq_lens.append(len(chosen_id.flatten()))
+            extras.append(margin)
+            chosen_response_lens.append(chosen_response_len)
+
+            rejected_ids.append(reject_id.flatten())
+            rejected_att_masks.append(torch.full_like(reject_id.flatten(), index + len(item_list)))
+            rejected_seq_lens.append(len(reject_id.flatten()))
+            index += 1
+
+        packed_input_ids = torch.cat(chosen_ids + rejected_ids, dim=0).unsqueeze(0)
+        packed_attention_masks = torch.cat(chosen_att_masks + rejected_att_masks, dim=0).unsqueeze(0)
+        packed_seq_lens = chosen_seq_lens + rejected_seq_lens
+
+        if self.multiple_of > 1 and packed_input_ids.numel() % self.multiple_of != 0:
+            padding_len = self.multiple_of - (packed_input_ids.numel() % self.multiple_of)
+            packed_input_ids = F.pad(packed_input_ids, (0, padding_len), value=self.tokenizer.pad_token_id)
+            packed_attention_masks = F.pad(packed_attention_masks, (0, padding_len), value=0)
+
+        return packed_input_ids, packed_attention_masks, packed_seq_lens, extras, chosen_response_lens
