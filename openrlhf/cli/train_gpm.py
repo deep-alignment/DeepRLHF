@@ -219,7 +219,7 @@ if __name__ == "__main__":
     parser.add_argument("--regression_target_margin", type=float, default=10.0, help="Target regression margin. A hyperparameter for Regression Loss.")
     parser.add_argument("--return_prompt_length", action="store_true", default=False, help="Return the prompt length in the dataset collator if set. Default to False. Should set to be True when 'add_prompt_head' is True.")
     parser.add_argument("--add_prompt_head", action="store_true", default=False, help="Add a prompt head to the model if set. Default to False.")
-    
+    parser.add_argument("--is_reward_embedding_normalized", action="store_true", default=False, help="Whether to normalize reward embeddings")
     # wandb pamameters
     parser.add_argument("--use_wandb", type=str, default=None)
     parser.add_argument("--wandb_org", type=str, default=None)
@@ -249,12 +249,6 @@ if __name__ == "__main__":
     parser.add_argument("--rejected_key", type=str, default="rejected")
     parser.add_argument("--prompt_key", type=str, default=None)
     parser.add_argument("--job_id", type=str, default="", help="Job ID for wandb run name")
-    parser.add_argument(
-        "--is_reward_embedding_normalized",
-        action="store_true",
-        default=False,
-        help="Whether to normalize reward embeddings",
-    )
 
     args = parser.parse_args()
     train(args)
