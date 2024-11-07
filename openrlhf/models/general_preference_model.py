@@ -30,7 +30,7 @@ def get_general_preference_model(
     add_prompt_head: bool = False,
     is_general_preference: bool = False,
     value_head_dim: int = 2,
-    is_reward_embedding_normalized: bool = False,  # Added argument
+    is_preference_embedding_normalized: bool = False,  # Renamed argument
     **kwargs,
 ) -> nn.Module:
     """Get reward model with a value head(linear layer) and a lm head.
@@ -52,7 +52,7 @@ def get_general_preference_model(
     config._attn_implementation = "flash_attention_2" if use_flash_attention_2 else "eager"
     base_class = AutoModel._model_mapping[type(config)]
     base_causal_class = AutoModelForCausalLM._model_mapping.get(type(config), None)
-    cls_class = _get_general_preference_model(base_causal_class, base_class, is_general_preference, add_prompt_head, value_head_dim, is_reward_embedding_normalized)  # Pass argument
+    cls_class = _get_general_preference_model(base_causal_class, base_class, is_general_preference, add_prompt_head, value_head_dim, is_preference_embedding_normalized=is_preference_embedding_normalized)  # Updated argument name
     # Note: dschf is defined in function scope to avoid global effects
     # https://huggingface.co/docs/transformers/main_classes/deepspeed#nontrainer-deepspeed-integration
     
@@ -122,7 +122,7 @@ def get_general_preference_model(
         
     return model
 
-def _get_general_preference_model(base_causal_model, base_llm_model, is_general_preference: bool=False, add_prompt_head: bool=False, value_head_dim: int=2, is_reward_embedding_normalized: bool = False):  # Added argument
+def _get_general_preference_model(base_causal_model, base_llm_model, is_general_preference: bool=False, add_prompt_head: bool=False, value_head_dim: int=2, is_preference_embedding_normalized: bool = False):  # Renamed argument
     class CustomRewardModel(base_causal_model):
         supports_gradient_checkpointing = True
 
@@ -137,7 +137,7 @@ def _get_general_preference_model(base_causal_model, base_llm_model, is_general_
                     self.prompt_head = nn.Linear(config.hidden_size, value_head_dim // 2, bias=False) 
         
             self.is_general_preference = is_general_preference    
-            self.is_reward_embedding_normalized = is_reward_embedding_normalized  # Store the argument
+            self.is_preference_embedding_normalized = is_preference_embedding_normalized  # Renamed attribute
             
             self.post_init()
 
@@ -171,7 +171,7 @@ def _get_general_preference_model(base_causal_model, base_llm_model, is_general_
                 # left padding in training mode
                 if self.training:
                     reward = values[:, -1, :]
-                    if self.is_reward_embedding_normalized:
+                    if self.is_preference_embedding_normalized:
                         reward = F.normalize(reward, p=2, dim=-1)  # Normalize reward
                 else:
                     eos_indices = attention_mask.size(1) - 1 - attention_mask.long().fliplr().argmax(dim=1)
@@ -180,7 +180,7 @@ def _get_general_preference_model(base_causal_model, base_llm_model, is_general_
                     for dim in range(value_head_dim):
                         reward_list.append(values[:,:,dim].gather(dim=1, index=eos_indices))
                     reward = torch.cat(reward_list, dim=1)
-                    if self.is_reward_embedding_normalized:
+                    if self.is_preference_embedding_normalized:
                         reward = F.normalize(reward, p=2, dim=-1)  # Normalize reward
                 if return_output:
                     return reward, outputs

@@ -31,7 +31,7 @@ def train(args):
         value_head_dim=args.value_head_dim,
         init_prompt_head=True,
         add_prompt_head=args.add_prompt_head,
-        is_reward_embedding_normalized=args.is_reward_embedding_normalized,  # Pass the argument
+        is_preference_embedding_normalized=args.is_preference_embedding_normalized,  # Updated argument name
     )
 
     # configure tokenizer
@@ -219,7 +219,7 @@ if __name__ == "__main__":
     parser.add_argument("--regression_target_margin", type=float, default=10.0, help="Target regression margin. A hyperparameter for Regression Loss.")
     parser.add_argument("--return_prompt_length", action="store_true", default=False, help="Return the prompt length in the dataset collator if set. Default to False. Should set to be True when 'add_prompt_head' is True.")
     parser.add_argument("--add_prompt_head", action="store_true", default=False, help="Add a prompt head to the model if set. Default to False.")
-    parser.add_argument("--is_reward_embedding_normalized", action="store_true", default=False, help="Whether to normalize reward embeddings")
+    parser.add_argument("--is_preference_embedding_normalized", action="store_true", default=False, help="Whether to normalize preference embeddings")  # Updated argument name and help text
     # wandb pamameters
     parser.add_argument("--use_wandb", type=str, default=None)
     parser.add_argument("--wandb_org", type=str, default=None)

@@ -7,7 +7,7 @@ openrlhf.cli.train_rm \
    --logging_steps 1 \
    --eval_steps -1 \
    --train_batch_size 128 \
-   --micro_train_batch_size 8 \
+   --micro_train_batch_size 16 \
    --pretrain meta-llama/Llama-3.2-3B-Instruct \
    --bf16 \
    --max_epochs 1 \
@@ -20,7 +20,7 @@ openrlhf.cli.train_rm \
    --chosen_key chosen \
    --rejected_key rejected \
    --flash_attn \
-   --load_checkpoint \
+   --packing_samples \
    --gradient_checkpointing \
    --use_wandb True \
    --wandb_project deeprlhf-rm \
@@ -28,6 +28,7 @@ openrlhf.cli.train_rm \
 EOF
      # --use_wandb [WANDB_TOKENS] or True (use wandb login command)
      # --packing_samples
+     # --load_checkpoint 
 
 
 if [[ ${1} != "slurm" ]]; then
