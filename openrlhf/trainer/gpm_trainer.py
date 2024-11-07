@@ -139,6 +139,7 @@ class GeneralPreferenceModelTrainer(ABC):
 
             self.model.train()
             acc_mean = 0
+            prob_mean = 0
             loss_mean = 0
 
             for chosen_ids, c_mask, reject_ids, r_mask, margin, chosen_response_len in self.train_dataloader:
