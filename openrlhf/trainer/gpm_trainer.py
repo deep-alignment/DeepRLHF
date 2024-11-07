@@ -114,6 +114,13 @@ class GeneralPreferenceModelTrainer(ABC):
             wandb.define_metric("eval/global_step")
             wandb.define_metric("eval/*", step_metric="eval/global_step", step_sync=True)
 
+        self.add_pretrain_loss = strategy.args.add_pretrain_loss
+        if self.add_pretrain_loss:
+            if strategy.args.ptx_loss_coef > 0:
+                self.ptx_loss_fn = SFTSumLoss(strategy.args.reward_scaler_beta)
+            else:
+                self.add_pretrain_loss = False
+
     def fit(self, args, consumed_samples=0, num_update_steps_per_epoch=None):
         # get eval and save steps
         if args.eval_steps == -1:

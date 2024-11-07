@@ -252,28 +252,60 @@ class GeneralRewardDataset(Dataset):
         tokenizer: Callable,
         max_length: int,
         strategy,
+        input_template=None,
         is_custom=False,
         return_prompt_length=False,
-        multiple_of=1
+        multiple_of=1,
     ) -> None:
         super().__init__()
-        self.prompts = []
-        self.chosens = []
-        self.rejects = []
-        self.margins = []
         self.tokenizer = tokenizer
         self.strategy = strategy
         self.max_length = max_length
+        self.multiple_of = multiple_of
         self.is_custom = is_custom
         self.return_prompt_length = return_prompt_length
-        self.multiple_of = multiple_of
 
-        for data in tqdm(dataset, disable=not self.strategy.is_rank_0()):
-            prompt, chosen, reject, margin = preprocess_data(data, is_custom=self.is_custom)
-            self.prompts.append(prompt)
-            self.chosens.append(chosen)
-            self.rejects.append(reject)
-            self.margins.append(margin)
+        # chat_template
+        self.input_template = input_template
+        self.prompt_key = getattr(self.strategy.args, "prompt_key", None)
+        self.chosen_key = getattr(self.strategy.args, "chosen_key", None)
+        self.rejected_key = getattr(self.strategy.args, "rejected_key", None)
+        self.apply_chat_template = getattr(self.strategy.args, "apply_chat_template", False)
+
+        if self.apply_chat_template:
+            self.apply_chat_template = self.tokenizer.apply_chat_template
+            tokenizer_chat_template = getattr(self.strategy.args, "tokenizer_chat_template", None)
+            if tokenizer_chat_template:
+                self.tokenizer.chat_template = tokenizer_chat_template
+
+        # Parallel loading datasets 
+        processed_dataset = dataset.map(
+            self.process_data, remove_columns=dataset.column_names, num_proc=8
+        )
+
+        # Store the processed data in class attributes
+        self.prompts = processed_dataset["prompt"]
+        self.chosens = processed_dataset["chosen"]
+        self.rejects = processed_dataset["reject"] 
+        self.margins = processed_dataset["margin"]
+
+    def process_data(self, data):
+        prompt, chosen, reject, margin = preprocess_data(
+            data,
+            self.input_template,
+            self.prompt_key,
+            self.chosen_key,
+            self.rejected_key,
+            self.apply_chat_template,
+            is_custom=self.is_custom,
+        )
+
+        return {
+            "prompt": prompt,
+            "chosen": chosen,
+            "reject": reject,
+            "margin": margin,
+        }
 
     def __len__(self):
         return len(self.chosens)
