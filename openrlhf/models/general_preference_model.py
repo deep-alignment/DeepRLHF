@@ -7,7 +7,7 @@ import torch.nn as nn
 from peft import LoraConfig, get_peft_model
 from peft.tuners.lora import LoraLayer
 from transformers import AutoConfig, AutoModel, BitsAndBytesConfig, AutoModelForCausalLM
-# from transformers.deepspeed import HfDeepSpeedConfig
+from transformers.integrations.deepspeed import HfDeepSpeedConfig
 from openrlhf.utils.logging_utils import init_logger
 import torch.nn.functional as F
 
@@ -56,7 +56,7 @@ def get_general_preference_model(
     # https://huggingface.co/docs/transformers/main_classes/deepspeed#nontrainer-deepspeed-integration
     
     if ds_config is not None and ds_config["zero_optimization"]["stage"] == 3:
-        # dschf = HfDeepSpeedConfig(ds_config)
+        dschf = HfDeepSpeedConfig(ds_config)
         ds_config = None
     else:
         dschf = None

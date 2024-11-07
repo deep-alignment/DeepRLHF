@@ -25,7 +25,7 @@ def train(args):
         lora_alpha=args.lora_alpha,
         target_modules=args.target_modules,
         lora_dropout=args.lora_dropout,
-        ds_config=strategy.get_ds_train_config(),
+        ds_config=strategy.get_ds_train_config(is_actor=False),
         init_value_head=True,
         is_general_preference=args.is_general_preference,
         value_head_dim=args.value_head_dim,
