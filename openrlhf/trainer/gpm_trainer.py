@@ -153,12 +153,60 @@ class GeneralPreferenceModelTrainer(ABC):
                     reject_ids = reject_ids.squeeze(1).to(torch.cuda.current_device())
                     r_mask = r_mask.squeeze(1).to(torch.cuda.current_device())
                     chosen_response_len = torch.tensor(chosen_response_len).view(-1, 1).to(torch.cuda.current_device())
+
+                    if args.add_pretrain_loss:
+                        if isinstance(self.ptx_loss_fn, DPORefFreeLoss):
+                            chosen_output = self.model.forward(chosen_ids, attention_mask=c_mask)
+                            chosen_label = torch.where(
+                                c_mask.bool(),
+                                chosen_ids,
+                                self.ptx_loss_fn.IGNORE_INDEX,
+                            ).to(torch.cuda.current_device())
+                            chosen_log_probs = chosen_output["logits"]
+                            rejected_output = self.model.forward(reject_ids, attention_mask=r_mask)
+                            rejected_label = torch.where(
+                                r_mask.bool(),
+                                reject_ids,
+                                self.ptx_loss_fn.IGNORE_INDEX,
+                            ).to(torch.cuda.current_device())
+                            rejected_log_probs = rejected_output["logits"] 
+                            chosen_reward_ptx_loss = self.ptx_loss_fn(chosen_log_probs, chosen_label, c_mask.bool(), rejected_log_probs, rejected_label, r_mask.bool())
+                        else:
+                            ptx_output = self.model.forward(chosen_ids, attention_mask=c_mask)
+                            ptx_label = torch.where(
+                                c_mask.bool(),
+                                chosen_ids,
+                                self.ptx_loss_fn.IGNORE_INDEX,
+                            ).to(torch.cuda.current_device())
+                            ptx_log_probs = ptx_output["logits"]
+                            chosen_reward_ptx_loss = self.ptx_loss_fn(ptx_log_probs, ptx_label, c_mask.bool())
                 else:
                     packed_input_ids, packed_attention_masks, packed_seq_lens, margin, chosen_response_lens = data
                     packed_input_ids, packed_attention_masks = packed_input_ids.to(
                         torch.cuda.current_device()
                     ), packed_attention_masks.to(torch.cuda.current_device())
                     chosen_response_len = torch.tensor(chosen_response_lens).view(-1, 1).to(torch.cuda.current_device())
+
+                    if args.add_pretrain_loss:
+                        half_len = len(packed_seq_lens) // 2
+                        chosen_seq_lens = packed_seq_lens[:half_len]
+                        chosen_len = sum(chosen_seq_lens)
+                        
+                        ptx_output = self.model.forward(
+                            packed_input_ids[:, :chosen_len], 
+                            attention_mask=packed_attention_masks[:, :chosen_len]
+                        )
+                        ptx_label = torch.where(
+                            packed_attention_masks[:, :chosen_len].bool(),
+                            packed_input_ids[:, :chosen_len],
+                            self.ptx_loss_fn.IGNORE_INDEX,
+                        ).to(torch.cuda.current_device())
+                        ptx_log_probs = ptx_output["logits"]
+                        chosen_reward_ptx_loss = self.ptx_loss_fn(
+                            ptx_log_probs, 
+                            ptx_label, 
+                            packed_attention_masks[:, :chosen_len].bool()
+                        )
 
                 if self.margin_loss:
                     margin = torch.tensor(margin).to(torch.cuda.current_device())
