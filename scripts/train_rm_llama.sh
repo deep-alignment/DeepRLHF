@@ -5,7 +5,7 @@ openrlhf.cli.train_gpm \
    --save_path ./checkpoint/Llama-3.2-3B-Instruct-RM \
    --save_steps -1 \
    --logging_steps 1 \
-   --eval_steps 10 \
+   --eval_steps -1 \
    --train_batch_size 128 \
    --micro_train_batch_size 8 \
    --pretrain meta-llama/Llama-3.2-3B-Instruct \
@@ -15,15 +15,6 @@ openrlhf.cli.train_gpm \
    --zero_stage 3 \
    --learning_rate 2e-6 \
    --l2 1e-3 \
-   --general_preference_tau 1 \
-   --dataset_probs 1 \
-   --group_size 1 \
-   --value_head_dim 2 \
-   --add_pretrain_loss \
-   --ptx_loss_coef 0.01 \
-   --is_general_preference \
-   --train_split_ratio 0.98 \
-   --save_best_model 2 \
    --dataset Skywork/Skywork-Reward-Preference-80K-v0.2 \
    --apply_chat_template \
    --chosen_key chosen \
