@@ -188,24 +188,27 @@ class GeneralPreferenceModelTrainer(ABC):
                     chosen_response_len = torch.tensor(chosen_response_lens).view(-1, 1).to(torch.cuda.current_device())
 
                     if args.add_pretrain_loss:
-                        half_len = len(packed_seq_lens) // 2
-                        chosen_seq_lens = packed_seq_lens[:half_len]
-                        chosen_len = sum(chosen_seq_lens)
-                        
-                        ptx_output = self.model.forward(
-                            packed_input_ids[:, :chosen_len], 
-                            attention_mask=packed_attention_masks[:, :chosen_len]
-                        )
+                        # Get indices for chosen sequences based on attention mask index values
+                        chosen_mask = packed_attention_masks <= len(packed_seq_lens) // 2
+                        chosen_ids = packed_input_ids * chosen_mask
+                        chosen_attn_mask = packed_attention_masks * chosen_mask
+
+                        # Remove padding
+                        max_chosen_len = chosen_attn_mask.sum(dim=1).max()
+                        chosen_ids = chosen_ids[:, :max_chosen_len]
+                        chosen_attn_mask = chosen_attn_mask[:, :max_chosen_len]
+
+                        ptx_output = self.model.forward(chosen_ids, attention_mask=chosen_attn_mask)
                         ptx_label = torch.where(
-                            packed_attention_masks[:, :chosen_len].bool(),
-                            packed_input_ids[:, :chosen_len],
+                            chosen_attn_mask.bool(),
+                            chosen_ids,
                             self.ptx_loss_fn.IGNORE_INDEX,
                         ).to(torch.cuda.current_device())
                         ptx_log_probs = ptx_output["logits"]
                         chosen_reward_ptx_loss = self.ptx_loss_fn(
-                            ptx_log_probs, 
-                            ptx_label, 
-                            packed_attention_masks[:, :chosen_len].bool()
+                            ptx_log_probs,
+                            ptx_label,
+                            chosen_attn_mask.bool()
                         )
 
                 if self.margin_loss:
@@ -408,15 +411,22 @@ class GeneralPreferenceModelTrainer(ABC):
             chosen_rewards = all_values[: chosen_ids.shape[0]]
             rejected_rewards = all_values[chosen_ids.shape[0] :]
         else:
-            # Handle packed samples without passing packed_seq_lens
+            # For packed samples, we need to use the actual sequence lengths to split rewards
             all_values, outputs = model.custom_forward(
                 chosen_ids, 
                 attention_mask=c_mask,
-                return_output=return_output
+                return_output=return_output,
+                ring_attn_group=self.strategy.ring_attn_group,
+                packed_seq_lens=reject_ids  # Note: reject_ids parameter actually contains packed_seq_lens
             )
-            half_len = len(reject_ids) // 2
-            chosen_rewards = all_values[:half_len]
-            rejected_rewards = all_values[half_len:]
+            
+            # Calculate number of chosen sequences (half of total sequences)
+            num_sequences = len(reject_ids)  # reject_ids contains packed_seq_lens
+            num_chosen = num_sequences // 2
+            
+            # Split rewards between chosen and rejected
+            chosen_rewards = all_values[:num_chosen]
+            rejected_rewards = all_values[num_chosen:num_sequences]
 
         return chosen_rewards, rejected_rewards, outputs
 
