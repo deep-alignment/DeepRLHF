@@ -218,5 +218,11 @@ if __name__ == "__main__":
         help="Betas for Adam optimizer",
     )
 
+    # Add the missing arguments
+    parser.add_argument("--apply_chat_template", action="store_true", default=False, help="Use HF tokenizer chat template")
+    parser.add_argument("--chosen_key", type=str, default="chosen")
+    parser.add_argument("--rejected_key", type=str, default="rejected")
+    parser.add_argument("--prompt_key", type=str, default=None)
+
     args = parser.parse_args()
     train(args)
