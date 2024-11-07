@@ -30,7 +30,7 @@
 OpenRLHF is a high-performance RLHF framework built on Ray, DeepSpeed and HF Transformers:
 
 - **Simple and easy to use**: OpenRLHF is one of the simplest high-performance RLHF libraries currently available, and seamlessly compatible with Huggingface models and datasets.
-- **High performance**: RLHF training spends 80% of the time on the sample generation stage. Thanks to the ability to use a large inference batch size with Ray and Adam Offload (Pinned Memory) and vLLM generation acceleration, the performance of OpenRLHF 2x+ that of Optimized DeepSpeedChat with Hybrid Engine.
+- **High performance**: RLHF training spends 80% of the time on the sample generation stage. Thanks to the ability to use a large inference batch size with Ray and Packing Samples and vLLM generation acceleration, the performance of OpenRLHF 3~4x+ that of Optimized DeepSpeedChat with Hybrid Engine.
 - **Distributed RLHF**:  OpenRLHF distribute the Actor, Reward, Reference, and Critic models onto separate GPUs using Ray, while placing the Adam optimizer on the CPU. This enables full-scale fine-tuning of 70B+ models with multiple A100 80G GPUs and vLLM and 7B models across multiple 24GB RTX 4090 GPUs.
 - **PPO Implementation Optimization**: We integrated the implementation tricks for PPO to improve the training stability, referencing [Zhihu](https://zhuanlan.zhihu.com/p/622134699) and the [Notion blog](https://difficult-link-dd7.notion.site/eb7b2d1891f44b3a84e7396d19d39e6f?v=01bcb084210149488d730064cbabc99f).
 
@@ -179,6 +179,7 @@ deepspeed --module openrlhf.cli.train_sft \
    --eval_steps -1 \
    --zero_stage 2 \
    --max_epochs 1 \
+   --packing_samples \
    --bf16 \
    --flash_attn \
    --learning_rate 5e-6 \
@@ -189,9 +190,6 @@ deepspeed --module openrlhf.cli.train_sft \
 # --apply_chat_template 
 # --input_key {JSON Key}
 # --tokenizer_chat_template {HF Chat Template}
-
-# Support samples packing
-# --packing_samples
 
 # Can also be used for continued pre-training
 # --pretrain_mode
@@ -221,11 +219,10 @@ deepspeed --module openrlhf.cli.train_rm \
    --chosen_key chosen \
    --rejected_key rejected \
    --flash_attn \
+   --packing_samples \
    --gradient_checkpointing \
    --use_wandb {wandb_token}
 
-# Support samples packing
-# --packing_samples
 ```
 
 ### PPO without Ray
@@ -310,13 +307,11 @@ ray job submit --address="http://127.0.0.1:8265" \
   --input_key context_messages \
   --apply_chat_template \
   --normalize_reward \
+  --packing_samples \
   --adam_offload \
   --flash_attn \
   --gradient_checkpointing \
   --use_wandb {wandb_token}
-
-# Support samples packing
-# --packing_samples (Recommended)
 
 # Support remote reward model (HTTP)
 # --remote_rm_url http://localhost:5000/get_reward
@@ -343,7 +338,7 @@ We optimized DSChat's performance to the greatest extent possible by employing t
 
 ### Performance Tuning Guide
 
-To achieve optimal performance, we recommend allocating more nodes to the vLLM Engine. For example, for a 70B model with 32 A100 GPUs, it is advised to allocate more than 16 A100 GPUs to the vLLM Engine, 8 GPUs to the Actor model, and the remaining 8 GPUs to the Critic model. Additionally, enable the `--colocate_critic_reward`, `--colocate_actor_ref`, or `--ref_reward_offload (Optional)` options to merge nodes. Finally, you should increase the `rollout_micro_batch_size` (and minimize the TP size of vLLM engine) as much as possible, and avoid OOM (Out Of Memory) using `--packing_samples`. During the training phase, a larger `--micro_train_batch_size` is better. Enable `enable_prefix_caching` in vLLM generation when `n_samples_per_prompt > 1`.
+To achieve optimal performance, we recommend allocating more nodes to the vLLM Engine. For example, for a 70B model with 32 A100 GPUs, it is advised to allocate more than 16 A100 GPUs to the vLLM Engine, 8 GPUs to the Actor model, and the remaining 8 GPUs to the Critic model. Additionally, enable the `--colocate_critic_reward`, `--colocate_actor_ref` options to merge nodes. Finally, you should increase the `rollout_micro_batch_size` (and minimize the TP size of vLLM engine) as much as possible. During the training phase, a larger `--micro_train_batch_size` is better and enable `--packing_samples`. Enable `enable_prefix_caching` in vLLM generation when `n_samples_per_prompt > 1`. When there are enough GPUs, please disable --adam_offload.
 
 ## Companies and Organizations using OpenRLHF
 
