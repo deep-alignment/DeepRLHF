@@ -167,7 +167,7 @@ class DeepspeedStrategy(ABC):
                     consumed_samples=consumed_samples,
                 )
             else:
-                from .import GroupDistributedSampler
+                from openrlhf.utils import GroupDistributedSampler
                 num_replicas = dist.get_world_size() // self.ring_attn_size
                 rank = dist.get_rank() // self.ring_attn_size
                 sampler = GroupDistributedSampler(

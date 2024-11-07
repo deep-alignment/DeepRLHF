@@ -3,7 +3,7 @@ from typing import TypeVar, Optional, Iterator
 
 import torch
 from torch.utils.data import Dataset
-from torch.utils.data.distributed import DistributedSampler
+from .distributed_sampler import DistributedSampler
 
 __all__ = ["GroupDistributedSampler", ]
 
@@ -13,12 +13,14 @@ T_co = TypeVar('T_co', covariant=True)
 class GroupDistributedSampler(DistributedSampler):
     def __init__(self, dataset: Dataset, num_replicas: Optional[int] = None,
                  rank: Optional[int] = None, shuffle: bool = True,
-                 seed: int = 0, drop_last: bool = False, group_size: int = 1, sample_group_num: Optional[int] = None) -> None:
-        super().__init__(dataset, num_replicas, rank, shuffle, seed, drop_last)
+                 seed: int = 0, drop_last: bool = False, group_size: int = 1,
+                 sample_group_num: Optional[int] = None, consumed_samples=0) -> None:
+        super().__init__(dataset, num_replicas, rank, shuffle, seed, drop_last, consumed_samples)
         self.group_size = group_size    
         self.num_groups = math.ceil(len(dataset) / group_size)  
         self.sample_group_num = sample_group_num if sample_group_num and sample_group_num <= self.num_groups else self.num_groups        
-        
+        self.consumed_indicies = consumed_samples // self.num_replicas
+
     def __iter__(self) -> Iterator[T_co]:
         if self.shuffle:
             # deterministically shuffle based on epoch and seed
@@ -51,12 +53,15 @@ class GroupDistributedSampler(DistributedSampler):
             indices = indices[self.rank:total_sample_size:self.num_replicas]
         else:
             indices = indices[self.rank:self.total_size:self.num_replicas]
-            assert len(indices) == self.num_samples
+        # Skip consumed samples
+        indices = indices[self.consumed_indicies:]
+        assert len(indices) == (self.num_samples - self.consumed_indicies)
 
         return iter(indices)
     
     def __len__(self) -> int:
         if self.sample_group_num < self.num_groups:
-            return math.ceil(self.sample_group_num * self.group_size / self.num_replicas)
+            total_sample_size = self.sample_group_num * self.group_size
+            return math.ceil(total_sample_size / self.num_replicas) - self.consumed_indicies
         else:
-            return self.num_samples
+            return self.num_samples - self.consumed_indicies
