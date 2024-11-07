@@ -343,10 +343,17 @@ class GeneralRewardDataset(Dataset):
         chosen_token["attention_mask"][0][-1] = True
         reject_token["attention_mask"][0][-1] = True
 
+        chosen_response_len = 0
         if self.return_prompt_length:
-            chosen_response_len = chosen_token["attention_mask"].sum() - len(prompt.split())
-        else:
-            chosen_response_len = 0
+            prompt_token = self.tokenizer(
+                prompt,
+                max_length=self.max_length,
+                padding=False,
+                truncation=True, 
+                return_tensors="pt",
+                add_special_tokens=False,
+            )
+            chosen_response_len = chosen_token["attention_mask"].sum() - prompt_token["attention_mask"].sum()
 
         return (
             chosen_token["input_ids"],
