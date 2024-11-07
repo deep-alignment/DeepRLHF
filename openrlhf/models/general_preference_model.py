@@ -51,7 +51,7 @@ def get_general_preference_model(
     config._attn_implementation = "flash_attention_2" if use_flash_attention_2 else "eager"
     base_class = AutoModel._model_mapping[type(config)]
     base_causal_class = AutoModelForCausalLM._model_mapping.get(type(config), None)
-    cls_class = _get_reward_model(base_causal_class, base_class, is_general_preference, add_prompt_head, value_head_dim)
+    cls_class = _get_general_preference_model(base_causal_class, base_class, is_general_preference, add_prompt_head, value_head_dim)
     # Note: dschf is defined in function scope to avoid global effects
     # https://huggingface.co/docs/transformers/main_classes/deepspeed#nontrainer-deepspeed-integration
     
@@ -121,7 +121,7 @@ def get_general_preference_model(
         
     return model
 
-def _get_reward_model(base_causal_model, base_llm_model, is_general_preference: bool=False, add_prompt_head: bool=False, value_head_dim: int=2):
+def _get_general_preference_model(base_causal_model, base_llm_model, is_general_preference: bool=False, add_prompt_head: bool=False, value_head_dim: int=2):
     class CustomRewardModel(base_causal_model):
         supports_gradient_checkpointing = True
 

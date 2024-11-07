@@ -4,8 +4,8 @@ import os
 from datetime import datetime
 from transformers.trainer import get_scheduler
 from openrlhf.datasets import GeneralRewardDataset
-from openrlhf.models import get_reward_model
-from openrlhf.trainer import GeneralPreferenceRewardTrainer
+from openrlhf.models import get_general_preference_model
+from openrlhf.trainer import GeneralPreferenceModelTrainer
 from openrlhf.utils import blending_datasets, get_strategy, get_tokenizer
 
 def train(args):
@@ -15,7 +15,7 @@ def train(args):
 
     # configure model
     # load huggingface model/config
-    model = get_reward_model(
+    model = get_general_preference_model(
         args.pretrain,
         use_flash_attention_2=args.flash_attn,
         bf16=args.bf16,
@@ -112,7 +112,7 @@ def train(args):
 
     # batch_size here is micro_batch_size * 2
     # we use merged chosen + rejected response forward
-    trainer = GeneralPreferenceRewardTrainer(
+    trainer = GeneralPreferenceModelTrainer(
         model=model,
         strategy=strategy,
         optim=optim,

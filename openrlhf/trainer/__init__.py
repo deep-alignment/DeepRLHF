@@ -4,4 +4,5 @@ from .kto_trainer import KTOTrainer
 from .ppo_trainer import PPOTrainer
 from .prm_trainer import ProcessRewardModelTrainer
 from .rm_trainer import RewardModelTrainer
+from .gpm_trainer import GeneralPreferenceModelTrainer
 from .sft_trainer import SFTTrainer

@@ -12,7 +12,7 @@ from models import PairWiseLoss, GeneralPreferenceLoss, HighDimGeneralPreference
 from models import GeneralPreferenceLearnableTauLoss, GeneralPreferenceLearnableTauRegressionLoss, GeneralPreferenceRegressionLoss
 from models import PairWiseLearnableTauLoss, PairWiseLearnableTauRegressionLoss, PairWiseRegressionLoss, HighDimGeneralPreferenceRegressionMoELoss
 from models import HighDimGeneralPreferenceRegressionLoss, HighDimGeneralPreferenceMoELoss
-class GeneralPreferenceRewardTrainer(ABC):
+class GeneralPreferenceModelTrainer(ABC):
     """
         Trainer to use while training reward model.
 
