@@ -6,12 +6,13 @@ import torch
 from torch import nn
 from torch.optim import Optimizer
 from torch.utils.data import DistributedSampler
-from utils.group_distributed_sampler import GroupDistributedSampler
+from openrlhf.utils.group_distributed_sampler import GroupDistributedSampler
 from tqdm import tqdm
-from models import PairWiseLoss, GeneralPreferenceLoss, HighDimGeneralPreferenceLoss, SFTMeanLoss, SFTSumLoss, DPORefFreeLoss, SFTVanillaLoss
-from models import GeneralPreferenceLearnableTauLoss, GeneralPreferenceLearnableTauRegressionLoss, GeneralPreferenceRegressionLoss
-from models import PairWiseLearnableTauLoss, PairWiseLearnableTauRegressionLoss, PairWiseRegressionLoss, HighDimGeneralPreferenceRegressionMoELoss
-from models import HighDimGeneralPreferenceRegressionLoss, HighDimGeneralPreferenceMoELoss
+from openrlhf.models import PairWiseLoss, GeneralPreferenceLoss, HighDimGeneralPreferenceLoss, SFTMeanLoss, SFTSumLoss, DPORefFreeLoss, SFTVanillaLoss
+from openrlhf.models import GeneralPreferenceLearnableTauLoss, GeneralPreferenceLearnableTauRegressionLoss, GeneralPreferenceRegressionLoss
+from openrlhf.models import PairWiseLearnableTauLoss, PairWiseLearnableTauRegressionLoss, PairWiseRegressionLoss, HighDimGeneralPreferenceRegressionMoELoss
+from openrlhf.models import HighDimGeneralPreferenceRegressionLoss, HighDimGeneralPreferenceMoELoss
+
 class GeneralPreferenceModelTrainer(ABC):
     """
         Trainer to use while training reward model.
