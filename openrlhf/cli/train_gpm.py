@@ -30,7 +30,8 @@ def train(args):
         is_general_preference=args.is_general_preference,
         value_head_dim=args.value_head_dim,
         init_prompt_head=True,
-        add_prompt_head=args.add_prompt_head
+        add_prompt_head=args.add_prompt_head,
+        is_reward_embedding_normalized=args.is_reward_embedding_normalized,  # Pass the argument
     )
 
     # configure tokenizer
@@ -248,6 +249,12 @@ if __name__ == "__main__":
     parser.add_argument("--rejected_key", type=str, default="rejected")
     parser.add_argument("--prompt_key", type=str, default=None)
     parser.add_argument("--job_id", type=str, default="", help="Job ID for wandb run name")
+    parser.add_argument(
+        "--is_reward_embedding_normalized",
+        action="store_true",
+        default=False,
+        help="Whether to normalize reward embeddings",
+    )
 
     args = parser.parse_args()
     train(args)
