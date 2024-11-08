@@ -191,7 +191,8 @@ class GeneralPreferenceModelTrainer(ABC):
                     chosen_last_hidden_states = last_hidden_states[:batch_size, :, :]
                     
                     prompt_end_index = chosen_last_hidden_states.size(1) - chosen_response_len - 1
-                    prompt_end_index_expanded = prompt_end_index.unsqueeze(-1).expand(-1, -1, chosen_last_hidden_states.size(-1))
+                    # Convert to long tensor for indexing
+                    prompt_end_index_expanded = prompt_end_index.unsqueeze(-1).expand(-1, -1, chosen_last_hidden_states.size(-1)).long()
                     prompt_hidden_state = torch.gather(chosen_last_hidden_states, dim=1, index=prompt_end_index_expanded).squeeze(1)
                     preference_loss, probs = self.loss_fn(chosen_reward, reject_reward, prompt_hidden_state.to(torch.cuda.current_device()), margin)
                 else:
@@ -264,7 +265,8 @@ class GeneralPreferenceModelTrainer(ABC):
                 if isinstance(self.loss_fn, HighDimGeneralPreferenceRegressionMoELoss) or isinstance(self.loss_fn, HighDimGeneralPreferenceMoELoss):
                     chosen_last_hidden_states = outputs["last_hidden_state"][: chosen_ids.shape[0], :, :]
                     prompt_end_index = chosen_last_hidden_states.size(1) - chosen_response_len - 1
-                    prompt_end_index_expanded = prompt_end_index.unsqueeze(-1).expand(-1, -1, chosen_last_hidden_states.size(-1))
+                    # Convert to long tensor for indexing
+                    prompt_end_index_expanded = prompt_end_index.unsqueeze(-1).expand(-1, -1, chosen_last_hidden_states.size(-1)).long()
                     prompt_hidden_state = torch.gather(chosen_last_hidden_states, dim=1, index=prompt_end_index_expanded).squeeze(1)
                     preference_loss, probs = self.loss_fn(chosen_reward, reject_reward, prompt_hidden_state.to(torch.cuda.current_device()), margin)
                 else:
@@ -451,7 +453,8 @@ class GeneralPreferenceModelTrainer(ABC):
                 if isinstance(self.loss_fn, HighDimGeneralPreferenceRegressionMoELoss):
                     chosen_last_hidden_states = outputs["last_hidden_state"][: chosen_ids.shape[0], :, :]
                     prompt_len = chosen_last_hidden_states.size(1) - chosen_response_len
-                    prompt_len_expanded = prompt_len.unsqueeze(-1).expand(-1, -1, chosen_last_hidden_states.size(-1))
+                    # Convert to long tensor for indexing
+                    prompt_len_expanded = prompt_len.unsqueeze(-1).expand(-1, -1, chosen_last_hidden_states.size(-1)).long()
                     prompt_hidden_state = torch.gather(chosen_last_hidden_states, dim=1, index=prompt_len_expanded).squeeze(1)
                     preference_loss, prob = self.loss_fn(chosen_reward, reject_reward, prompt_hidden_state, margin)
                 else:
