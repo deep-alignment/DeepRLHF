@@ -10,7 +10,7 @@ openrlhf.cli.train_gpm \
    --micro_train_batch_size 8 \
    --pretrain meta-llama/Llama-3.2-3B-Instruct \
    --bf16 \
-   --max_epochs 2 \
+   --max_epochs 1 \
    --max_len 8192 \
    --zero_stage 3 \
    --learning_rate 2e-6 \
