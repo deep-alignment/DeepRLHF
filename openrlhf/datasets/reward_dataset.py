@@ -256,6 +256,7 @@ class GeneralRewardDataset(Dataset):
         is_custom=False,
         return_prompt_length=False,
         multiple_of=1,
+        num_processors=8,
     ) -> None:
         super().__init__()
         self.tokenizer = tokenizer
@@ -275,37 +276,48 @@ class GeneralRewardDataset(Dataset):
         if self.apply_chat_template:
             self.apply_chat_template = self.tokenizer.apply_chat_template
             tokenizer_chat_template = getattr(self.strategy.args, "tokenizer_chat_template", None)
-            if tokenizer_chat_template:
+            if (tokenizer_chat_template):
                 self.tokenizer.chat_template = tokenizer_chat_template
 
-        # Parallel loading datasets 
+        # Parallel loading datasets similar to RewardDataset
         processed_dataset = dataset.map(
-            self.process_data, remove_columns=dataset.column_names, num_proc=8
+            self.process_data, remove_columns=dataset.column_names, num_proc=num_processors
         )
 
-        # Store the processed data in class attributes
+        # Filter out None values
+        processed_dataset = processed_dataset.filter(lambda x: x["prompt"] is not None)
+
+        # Store the processed data in class attributes like RewardDataset
         self.prompts = processed_dataset["prompt"]
         self.chosens = processed_dataset["chosen"]
-        self.rejects = processed_dataset["reject"] 
+        self.rejects = processed_dataset["reject"]
         self.margins = processed_dataset["margin"]
 
     def process_data(self, data):
-        prompt, chosen, reject, margin = preprocess_data(
-            data,
-            self.input_template,
-            self.prompt_key,
-            self.chosen_key,
-            self.rejected_key,
-            self.apply_chat_template,
-            is_custom=self.is_custom,
-        )
+        try:
+            prompt, chosen, reject, margin = preprocess_data(
+                data,
+                self.input_template,
+                self.prompt_key,
+                self.chosen_key,
+                self.rejected_key,
+                self.apply_chat_template,
+                is_custom=self.is_custom,
+            )
+            
+            # Validate processed data
+            if prompt is None or chosen is None or reject is None:
+                return None
 
-        return {
-            "prompt": prompt,
-            "chosen": chosen,
-            "reject": reject,
-            "margin": margin,
-        }
+            return {
+                "prompt": prompt,
+                "chosen": chosen,
+                "reject": reject,
+                "margin": margin,
+            }
+        except Exception as e:
+            print(f"Error processing individual data item: {str(e)}")
+            return None
 
     def __len__(self):
         return len(self.chosens)

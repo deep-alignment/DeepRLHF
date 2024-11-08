@@ -14,8 +14,7 @@ def train(args):
     strategy = get_strategy(args)
     strategy.setup_distributed()
 
-    # configure model
-    # load huggingface model/config
+    # Configure model - keep GPM specific parameters
     model = get_general_preference_model(
         args.pretrain,
         use_flash_attention_2=args.flash_attn,
@@ -31,7 +30,7 @@ def train(args):
         value_head_dim=args.value_head_dim,
         init_prompt_head=True,
         add_prompt_head=args.add_prompt_head,
-        is_preference_embedding_normalized=args.is_preference_embedding_normalized,  # Updated argument name
+        is_preference_embedding_normalized=args.is_preference_embedding_normalized,
     )
 
     # configure tokenizer
@@ -45,7 +44,7 @@ def train(args):
         model, lr=args.learning_rate, betas=args.adam_betas, weight_decay=args.l2
     )
 
-    # prepare for data and dataset
+    # Prepare datasets - align with RM pattern but keep GPM features
     train_data, eval_data = blending_datasets(
         args.dataset,
         args.dataset_probs,
@@ -55,21 +54,32 @@ def train(args):
         stopping_strategy="all_exhausted",
         train_split=args.train_split,
         eval_split=args.eval_split,
-        train_split_ratio=args.train_split_ratio,  # Add this parameter
+        train_split_ratio=args.train_split_ratio,
     )
-    
-    train_data = train_data.select(range(min(args.max_samples, len(train_data))))
-    eval_data = eval_data.select(range(min(args.max_samples, len(eval_data))))
 
     train_dataset = GeneralRewardDataset(
-        train_data,
+        train_data.select(range(min(args.max_samples, len(train_data)))),
         tokenizer,
         args.max_len,
         strategy,
+        input_template=args.input_template,
         is_custom=args.is_custom_dataset,
         return_prompt_length=args.return_prompt_length,
-        multiple_of=args.ring_attn_size  # Add this parameter
+        multiple_of=args.ring_attn_size,
     )
+
+    eval_dataset = GeneralRewardDataset(
+        eval_data.select(range(min(args.max_samples, len(eval_data)))),
+        tokenizer,
+        args.max_len,
+        strategy,
+        input_template=args.input_template,
+        is_custom=args.is_custom_dataset,
+        return_prompt_length=args.return_prompt_length,
+        multiple_of=args.ring_attn_size,
+    ) if len(eval_data) > 0 else None
+
+    # Create dataloaders only for non-empty datasets
     train_dataloader = strategy.setup_dataloader(
         train_dataset,
         args.micro_train_batch_size,
@@ -79,23 +89,13 @@ def train(args):
         group_size=args.group_size,
     )
 
-    # Simplify eval dataset creation - always create it if eval_data exists
-    eval_dataset = GeneralRewardDataset(
-        eval_data,
-        tokenizer,
-        args.max_len,
-        strategy,
-        is_custom=args.is_custom_dataset,
-        return_prompt_length=args.return_prompt_length,
-        multiple_of=args.ring_attn_size  # Add this parameter
-    )
     eval_dataloader = strategy.setup_dataloader(
         eval_dataset,
-        args.micro_train_batch_size,  
+        args.micro_train_batch_size,
         True,
         False,
-        eval_dataset.packing_collate_fn if args.packing_samples else eval_dataset.collate_fn
-    )
+        eval_dataset.packing_collate_fn if args.packing_samples else eval_dataset.collate_fn,
+    ) if eval_dataset is not None else None
 
     # scheduler
     num_update_steps_per_epoch = len(train_dataset) // args.train_batch_size
