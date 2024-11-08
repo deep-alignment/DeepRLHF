@@ -6,7 +6,7 @@
 #SBATCH --time=8:00:00
 #SBATCH --gres=gpu:4
 #SBATCH --partition=dc-hwai
-#SBATCH -o %j.log  # %j will be replaced by the job ID
+#SBATCH -o ./log/%j.log  # %j will be replaced by the job ID
 #SBATCH --mail-type=end
 #SBATCH --mail-user=yif-zhang@outlook.com
 
