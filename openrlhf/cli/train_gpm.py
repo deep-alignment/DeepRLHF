@@ -208,7 +208,7 @@ if __name__ == "__main__":
     parser.add_argument("--save_best_model", type=int, default=None, help="Save the top N models with the lowest evaluation loss.")
     parser.add_argument("--add_pretrain_loss", action="store_true", default=False, help="Include the pretraining loss of chosen inputs in the total loss calculation.")
     parser.add_argument("--ptx_loss_coef", type=float, default=0.01, help="coefficient for pretraining loss included in the total loss.")
-    parser.add_argument("--train_split_ratio", type=float, default=1, help="Ratio of the dataset to use for training. (1-train_split_ratio) for validation. Should not exceed 1.")
+    parser.add_argument("--train_split_ratio", type=float, default=0.97, help="Ratio of the dataset to use for training. (1-train_split_ratio) for validation. Should not exceed 1.")
     parser.add_argument("--train_split", type=str, default="train", help="train split of the HF dataset")
     parser.add_argument("--eval_split", type=str, default="test", help="test split of the dataset")
     parser.add_argument("--reward_scaler_beta", type=float, default=2.0, help="A constant that controls the scaling of the reward difference.")
