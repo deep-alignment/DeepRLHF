@@ -184,42 +184,51 @@ def _get_general_preference_model(base_causal_model, base_llm_model, is_general_
                 
             return (reward, outputs) if return_output else (reward, None)
         
-        def create_skew_symmetric_block_matrix(self, dim, device, dtype, prompt_hidden_states):
+        def create_skew_symmetric_block_matrix(self, dim, device, dtype, prompt_hidden_states=None):
             """
             Create a batch of skew-symmetric block matrices where each matrix is data-dependent on
-            the corresponding prompt_hidden_states. Only the relevant block diagonal parts are generated.
+            the corresponding prompt_hidden_states.
             
             Args:
-            - dim: Dimension of the square matrix (must be even).
-            - prompt_hidden_states: Tensor of shape [batch_size, hidden_dim].
+            - dim: Dimension of the square matrix (must be even)
+            - device: Device for the output tensor
+            - dtype: Data type for the output tensor
+            - prompt_hidden_states: Tensor of shape [batch_size, hidden_dim] or None
             
             Returns:
-            - batch_R_matrices: Tensor of shape [batch_size, dim, dim], with skew-symmetric block entries.
+            - batch_R_matrices: Tensor of shape [batch_size, dim, dim], with skew-symmetric block entries
             """
-            if hasattr(self, 'prompt_head'):
-                batch_size = prompt_hidden_states.shape[0]
-                hidden_dim = prompt_hidden_states.shape[1]
-                
-                # Ensure that dim is even, as we're creating blocks of size 2x2
-                assert dim % 2 == 0, "dim must be even for skew-symmetric block generation"
-
-                # Pass through the linear layer to get the block diagonal entries (half of the matrix's off-diagonal blocks)
-                block_values = self.prompt_head(prompt_hidden_states).view(batch_size, dim // 2)
-                block_values = torch.softmax(block_values / math.sqrt(hidden_dim), dim=-1)
-                block_values = block_values * block_values.shape[-1]  # Scale to ensure sum of probabilities is equal to the dimension
-                # block_values = torch.sigmoid(block_values / math.sqrt(hidden_dim))
-                
-                # Create a batch of zero matrices [batch_size, dim, dim]
-                batch_R_matrices = torch.zeros((batch_size, dim, dim), device=device, dtype=dtype)
-                
-                # Fill only the block diagonal entries with the learned values
-                for i in range(0, dim, 2):
-                    batch_R_matrices[:, i, i + 1] = -block_values[:, i // 2]
-                    batch_R_matrices[:, i + 1, i] = block_values[:, i // 2]  # Skew-symmetric condition
-            else:
+            if not hasattr(self, 'prompt_head'):
                 raise AttributeError("prompt_head is not defined. Ensure 'add_prompt_head' is set to True during initialization.")
                 
+            if prompt_hidden_states is None:
+                # Create default skew-symmetric matrix if no prompt states provided
+                batch_size = 1
+                batch_R_matrices = torch.zeros((batch_size, dim, dim), device=device, dtype=dtype)
+                for i in range(0, dim, 2):
+                    batch_R_matrices[:, i, i + 1] = -1.0
+                    batch_R_matrices[:, i + 1, i] = 1.0
+                return batch_R_matrices
+                
+            batch_size = prompt_hidden_states.shape[0]
+            hidden_dim = prompt_hidden_states.shape[1]
+            
+            # Ensure dim is even
+            assert dim % 2 == 0, "dim must be even for skew-symmetric block generation"
+
+            # Generate block diagonal entries
+            block_values = self.prompt_head(prompt_hidden_states).view(batch_size, dim // 2)
+            block_values = torch.softmax(block_values / math.sqrt(hidden_dim), dim=-1)
+            block_values = block_values * block_values.shape[-1]
+
+            # Create batch of matrices
+            batch_R_matrices = torch.zeros((batch_size, dim, dim), device=device, dtype=dtype)
+            
+            # Fill block diagonal entries
+            for i in range(0, dim, 2):
+                batch_R_matrices[:, i, i + 1] = -block_values[:, i // 2]
+                batch_R_matrices[:, i + 1, i] = block_values[:, i // 2]
+                    
             return batch_R_matrices
-        
                 
     return CustomRewardModel
