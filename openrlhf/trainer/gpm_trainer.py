@@ -106,7 +106,17 @@ class GeneralPreferenceModelTrainer(ABC):
                 entity=strategy.args.wandb_org,
                 project=strategy.args.wandb_project,
                 group=strategy.args.wandb_group,
-                name="GPM_M_" + str(strategy.args.pretrain) + "_D_" + str(strategy.args.dataset) + "_" + "mbs" + str(strategy.args.micro_train_batch_size) + "_" + str(strategy.args.max_epochs) + "epoch" + "_jobid_" + str(strategy.args.job_id) + "_" + str(strategy.args.wandb_run_name),
+                name="GPM_" + \
+                     ("Normalize" if strategy.args.is_preference_embedding_normalized else "") + \
+                     ("Gating" if strategy.args.add_prompt_head else "") + \
+                     f"Vdim{strategy.args.value_head_dim}_" + \
+                     ("Ptx" if strategy.args.add_pretrain_loss else "") + \
+                     (f"{strategy.args.ptx_loss_coef}" if strategy.args.add_pretrain_loss else "") + \
+                     "M_" + str(strategy.args.pretrain) + "_D_" + \
+                     str(strategy.args.dataset) + "_mbs" + \
+                     str(strategy.args.micro_train_batch_size) + "_" + \
+                     str(strategy.args.max_epochs) + "epoch_jobid_" + \
+                     str(strategy.args.job_id) + "_" + str(strategy.args.wandb_run_name),
                 config=strategy.args.__dict__,
                 reinit=True,
             )
