@@ -129,6 +129,9 @@ class RewardModelTrainer(ABC):
             self.model.train()
             acc_mean = 0
             loss_mean = 0
+            prob_mean = 0  # Add prob tracking
+            relative_score_mean = 0  # Add relative score tracking
+
             for data in self.train_dataloader:
                 if not self.packing_samples:
                     chosen_ids, c_mask, reject_ids, r_mask, margin = data
@@ -160,11 +163,18 @@ class RewardModelTrainer(ABC):
                     chosen_reward = chosen_reward.float()
                     reject_reward = reject_reward.float()
 
-                preference_loss = self.loss_fn(chosen_reward, reject_reward, margin)
-                # If preference_loss is a tuple, we use the first element as the loss
-                if isinstance(preference_loss, tuple):
-                    preference_loss = preference_loss[0]
-                    
+                # Use tuple unpacking for loss and relative_score
+                preference_loss, relative_score = self.loss_fn(chosen_reward, reject_reward, margin)
+                # Calculate probabilities from relative scores
+                probs = torch.sigmoid(relative_score)
+
+                # Update existing metrics
+                acc = (probs > 0.5).float().mean().item()
+                acc_mean = acc_mean * 0.9 + 0.1 * acc
+                loss_mean = loss_mean * 0.9 + 0.1 * preference_loss.item()
+                prob_mean = prob_mean * 0.9 + 0.1 * probs.mean().item()  # Track prob mean
+                relative_score_mean = relative_score_mean * 0.9 + 0.1 * relative_score.mean().item()  # Track relative score mean
+
                 # mixtral
                 if not self.aux_loss:
                     aux_loss = 0
@@ -173,9 +183,6 @@ class RewardModelTrainer(ABC):
                 self.strategy.backward(loss, self.model, self.optimizer)
                 self.strategy.optimizer_step(self.optimizer, self.model, self.scheduler)
 
-                acc = (chosen_reward > reject_reward).float().mean().item()
-                acc_mean = acc_mean * 0.9 + 0.1 * acc
-                loss_mean = loss_mean * 0.9 + 0.1 * preference_loss.item()
                 # optional rm info
                 logs_dict = {
                     "loss": preference_loss.item(),
@@ -184,6 +191,10 @@ class RewardModelTrainer(ABC):
                     "reject_reward": reject_reward.mean().item(),
                     "loss_mean": loss_mean,
                     "acc_mean": acc_mean,
+                    "probs": probs.mean().item(),  # Add probs
+                    "prob_mean": prob_mean,  # Add prob mean
+                    "relative_score": relative_score.mean().item(),  # Add relative score
+                    "relative_score_mean": relative_score_mean,  # Add relative score mean
                     "lr": self.scheduler.get_last_lr()[0],
                 }
                 if self.aux_loss:
@@ -242,6 +253,9 @@ class RewardModelTrainer(ABC):
             acc = 0
             rewards = []
             loss_sum = 0
+            prob_sum = 0  # Add prob tracking
+            relative_score_sum = 0  # Add relative score tracking
+
             for data in eval_dataloader:
                 if not self.packing_samples:
                     chosen_ids, c_mask, reject_ids, r_mask, margin = data
@@ -268,18 +282,22 @@ class RewardModelTrainer(ABC):
                 else:
                     margin = None
 
-                loss = self.loss_fn(chosen_reward, reject_reward, margin)
-                # if preference_loss is a tuple, we use the first element as the loss
-                if isinstance(loss, tuple):
-                    loss = loss[0]
-
+                # Use tuple unpacking for loss and relative_score  
+                preference_loss, relative_score = self.loss_fn(chosen_reward, reject_reward, margin)
+                probs = torch.sigmoid(relative_score)
+                
                 rewards += [chosen_reward.flatten(), reject_reward.flatten()]
-                acc += (chosen_reward > reject_reward).float().mean().item()
-                loss_sum += loss.item()
+                acc += (probs > 0.5).float().mean().item()
+                loss_sum += preference_loss.item()
+                prob_sum += probs.mean().item()  # Track prob sum
+                relative_score_sum += relative_score.mean().item()  # Track relative score sum
+
                 step_bar.update()
 
             acc_mean = acc / self.eval_dataloader.__len__()
             loss_mean = loss_sum / self.eval_dataloader.__len__()
+            prob_mean = prob_sum / self.eval_dataloader.__len__()  # Calculate prob mean
+            relative_score_mean = relative_score_sum / self.eval_dataloader.__len__()  # Calculate relative score mean
 
             rewards = torch.cat(rewards).float()
             rewards = self.strategy.all_gather(rewards)
@@ -292,11 +310,14 @@ class RewardModelTrainer(ABC):
             unwrap_model.config.mean = reward_mean.item()
             unwrap_model.config.std = reward_std.item()
 
+            # Update bar_dict with new metrics
             bar_dict = {
                 "eval_loss": loss_mean,
                 "acc_mean": acc_mean,
                 "reward_mean": reward_mean.item(),
                 "reward_std": reward_std.item(),
+                "prob_mean": prob_mean,  # Add prob mean
+                "relative_score_mean": relative_score_mean,  # Add relative score mean
             }
             logs = self.strategy.all_reduce(bar_dict)
             step_bar.set_postfix(logs)
