@@ -19,10 +19,7 @@ openrlhf.cli.train_gpm \
    --dataset_probs 1 \
    --group_size 1 \
    --value_head_dim 2 \
-   --add_pretrain_loss \
-   --ptx_loss_coef 0.00 \
    --is_general_preference \
-   --is_preference_embedding_normalized \
    --train_split_ratio 1.0 \
    --save_best_model 2 \
    --dataset Skywork/Skywork-Reward-Preference-80K-v0.2 \
@@ -39,9 +36,11 @@ EOF
      # --use_wandb [WANDB_TOKENS] or True (use wandb login command)
      # --packing_samples
      # --load_checkpoint
+     # --is_preference_embedding_normalized \
      # --return_prompt_length \
      # --add_prompt_head \
-
+     # --add_pretrain_loss \
+     # --ptx_loss_coef 0.00 \
 
 if [[ ${1} != "slurm" ]]; then
     deepspeed --module $training_commands
