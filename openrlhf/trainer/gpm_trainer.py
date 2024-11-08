@@ -155,136 +155,74 @@ class GeneralPreferenceModelTrainer(ABC):
             loss_mean = 0
 
             for data in self.train_dataloader:
-                return_output = True if isinstance(self.loss_fn, (HighDimGeneralPreferenceRegressionMoELoss, HighDimGeneralPreferenceMoELoss)) else False
-
+                # Process input data based on packing mode
                 if not self.packing_samples:
                     chosen_ids, c_mask, reject_ids, r_mask, margin, chosen_response_len = data
                     chosen_ids = chosen_ids.squeeze(1).to(torch.cuda.current_device())
                     c_mask = c_mask.squeeze(1).to(torch.cuda.current_device())
                     reject_ids = reject_ids.squeeze(1).to(torch.cuda.current_device())
                     r_mask = r_mask.squeeze(1).to(torch.cuda.current_device())
-                    margin = torch.tensor(margin, device=torch.cuda.current_device()) if margin else None
+                    margin = torch.tensor(margin).to(torch.cuda.current_device()) if margin else None
                     chosen_response_len = torch.tensor(chosen_response_len).view(-1, 1).to(torch.cuda.current_device())
-                    
-                    chosen_reward, reject_reward, outputs = self.concatenated_forward(
-                        self.model, chosen_ids, c_mask, reject_ids, r_mask, return_output
-                    )
-
-                    if isinstance(self.loss_fn, (HighDimGeneralPreferenceRegressionMoELoss, HighDimGeneralPreferenceMoELoss)):
-                        chosen_last_hidden_states = outputs["last_hidden_state"][: chosen_ids.shape[0], :, :]
-                        prompt_end_index = chosen_last_hidden_states.size(1) - chosen_response_len - 1
-                        prompt_end_index_expanded = prompt_end_index.unsqueeze(-1).expand(-1, 1, chosen_last_hidden_states.size(-1))
-                        prompt_end_index_expanded = prompt_end_index_expanded.long()
-
-                        if chosen_last_hidden_states.size(0) == 1:
-                            chosen_last_hidden_states = chosen_last_hidden_states.expand(prompt_end_index_expanded.size(0), -1, -1)
-                        prompt_hidden_state = torch.gather(chosen_last_hidden_states, 1, prompt_end_index_expanded).squeeze(1)
                 else:
                     packed_input_ids, packed_attention_masks, packed_seq_lens, margin, chosen_response_lens = data
                     packed_input_ids = packed_input_ids.to(torch.cuda.current_device())
                     packed_attention_masks = packed_attention_masks.to(torch.cuda.current_device())
-                    margin = torch.tensor(margin, device=torch.cuda.current_device()) if margin else None
+                    margin = torch.tensor(margin).to(torch.cuda.current_device()) if margin else None
                     chosen_response_len = torch.tensor(chosen_response_lens).view(-1, 1).to(torch.cuda.current_device())
 
+                # Forward pass
+                return_output = True if isinstance(self.loss_fn, (HighDimGeneralPreferenceRegressionMoELoss, HighDimGeneralPreferenceMoELoss)) else False
+                if not self.packing_samples:
+                    chosen_reward, reject_reward, outputs = self.concatenated_forward(
+                        self.model, chosen_ids, c_mask, reject_ids, r_mask, return_output
+                    )
+                else:
                     chosen_reward, reject_reward, outputs = self.concatenated_forward(
                         self.model, packed_input_ids, packed_attention_masks, packed_seq_lens, None, return_output
                     )
 
-                    if isinstance(self.loss_fn, (HighDimGeneralPreferenceRegressionMoELoss, HighDimGeneralPreferenceMoELoss)):
-                        batch_size = len(packed_seq_lens) // 2
-                        chosen_last_hidden_states = outputs["last_hidden_state"][:batch_size, :, :]
-                        prompt_end_index = chosen_last_hidden_states.size(1) - chosen_response_len - 1
-                        prompt_end_index_expanded = prompt_end_index.unsqueeze(-1).expand(-1, 1, chosen_last_hidden_states.size(-1))
-                        prompt_end_index_expanded = prompt_end_index_expanded.long()
-                        
-                        if chosen_last_hidden_states.size(0) == 1:
-                            chosen_last_hidden_states = chosen_last_hidden_states.expand(prompt_end_index_expanded.size(0), -1, -1)
-                        prompt_hidden_state = torch.gather(chosen_last_hidden_states, 1, prompt_end_index_expanded).squeeze(1)
-
+                # Extract prompt hidden states for MoE models if needed
+                prompt_hidden_state = None
                 if isinstance(self.loss_fn, (HighDimGeneralPreferenceRegressionMoELoss, HighDimGeneralPreferenceMoELoss)):
-                    if not self.packing_samples:
-                        chosen_last_hidden_states = outputs["last_hidden_state"][: chosen_ids.shape[0], :, :]
-                    else:
-                        # For packed samples, get the first half of the sequences
-                        num_sequences = len(packed_seq_lens)
-                        num_chosen = num_sequences // 2
-                        chosen_last_hidden_states = outputs["last_hidden_state"][:num_chosen, :, :]
-                        
-                    prompt_end_index = chosen_last_hidden_states.size(1) - chosen_response_len - 1
-                    prompt_end_index_expanded = prompt_end_index.unsqueeze(-1).expand(-1, -1, chosen_last_hidden_states.size(-1))
-                    prompt_end_index_expanded = prompt_end_index_expanded.long()
-
-                    if chosen_last_hidden_states.size(0) == 1:
-                        chosen_last_hidden_states = chosen_last_hidden_states.expand(prompt_end_index_expanded.size(0), -1, -1)
-                    prompt_hidden_state = torch.gather(chosen_last_hidden_states, dim=1, index=prompt_end_index_expanded).squeeze(1)
-                    preference_loss, probs = self.loss_fn(chosen_reward, reject_reward, prompt_hidden_state.to(torch.cuda.current_device()), margin)
-                else:
-                    preference_loss, probs = self.loss_fn(chosen_reward, reject_reward, margin)
-
-                if self.margin_loss:
-                    margin = torch.tensor(margin).to(torch.cuda.current_device())
-                else:
-                    margin = None
-                
-                if isinstance(self.loss_fn, (HighDimGeneralPreferenceRegressionMoELoss, HighDimGeneralPreferenceMoELoss)):
-                    # Get last hidden state for all samples
-                    last_hidden_states = outputs["last_hidden_state"]
                     batch_size = len(packed_seq_lens) // 2 if self.packing_samples else chosen_ids.shape[0]
-                    chosen_last_hidden_states = last_hidden_states[:batch_size, :, :]
-                    
+                    chosen_last_hidden_states = outputs["last_hidden_state"][:batch_size, :, :]
                     prompt_end_index = chosen_last_hidden_states.size(1) - chosen_response_len - 1
-                    # Convert to long tensor for indexing
-                    prompt_end_index_expanded = prompt_end_index.unsqueeze(-1).expand(-1, -1, chosen_last_hidden_states.size(-1))
-                    # Before using the index tensor in torch.gather()
+                    prompt_end_index_expanded = prompt_end_index.unsqueeze(-1).expand(-1, 1, chosen_last_hidden_states.size(-1))
                     prompt_end_index_expanded = prompt_end_index_expanded.long()
 
-                    # Ensure batch dimensions match between tensors
                     if chosen_last_hidden_states.size(0) == 1:
                         chosen_last_hidden_states = chosen_last_hidden_states.expand(prompt_end_index_expanded.size(0), -1, -1)
-                    prompt_hidden_state = torch.gather(chosen_last_hidden_states, dim=1, index=prompt_end_index_expanded).squeeze(1)
+                    prompt_hidden_state = torch.gather(chosen_last_hidden_states, 1, prompt_end_index_expanded).squeeze(1)
+
+                # Compute loss and probabilities
+                if self.compute_fp32_loss:
+                    chosen_reward = chosen_reward.float()
+                    reject_reward = reject_reward.float()
+                    
+                if isinstance(self.loss_fn, (HighDimGeneralPreferenceRegressionMoELoss, HighDimGeneralPreferenceMoELoss)):
                     preference_loss, probs = self.loss_fn(chosen_reward, reject_reward, prompt_hidden_state.to(torch.cuda.current_device()), margin)
                 else:
                     preference_loss, probs = self.loss_fn(chosen_reward, reject_reward, margin)
 
-                # Calculate accuracy from per-sample probabilities
+                # Calculate metrics
                 acc = (probs > 0.5).float().mean().item()
                 acc_mean = acc_mean * 0.9 + 0.1 * acc
                 prob_mean = prob_mean * 0.9 + 0.1 * probs.mean().item()
                 loss_mean = loss_mean * 0.9 + 0.1 * preference_loss.item()
 
+                # Add pretrain loss if enabled
                 if args.add_pretrain_loss:
-                    if isinstance(self.ptx_loss_fn, DPORefFreeLoss):
-                        if not self.packing_samples:
-                            chosen_output = self.model.forward(chosen_ids, attention_mask=c_mask)
-                            chosen_label = torch.where(
-                                c_mask.bool(),
-                                chosen_ids,
-                                self.ptx_loss_fn.IGNORE_INDEX,
-                            ).to(torch.cuda.current_device())
-                            chosen_log_probs = chosen_output["logits"]
-                            rejected_output = self.model.forward(reject_ids, attention_mask=r_mask)
-                            rejected_label = torch.where(
-                                r_mask.bool(),
-                                reject_ids,
-                                self.ptx_loss_fn.IGNORE_INDEX,
-                            ).to(torch.cuda.current_device())
-                            rejected_log_probs = rejected_output["logits"] 
-                            chosen_reward_ptx_loss = self.ptx_loss_fn(chosen_log_probs, chosen_label, c_mask.bool(), rejected_log_probs, rejected_label, r_mask.bool())
-                        else:
-                            ptx_output = self.model.forward(chosen_ids, attention_mask=c_mask)
-                            ptx_label = torch.where(
-                                c_mask.bool(),
-                                chosen_ids,
-                                self.ptx_loss_fn.IGNORE_INDEX,
-                            ).to(torch.cuda.current_device())
-                            ptx_log_probs = ptx_output["logits"]
-                            chosen_reward_ptx_loss = self.ptx_loss_fn(ptx_log_probs, ptx_label, c_mask.bool())
-                else:
-                    chosen_reward, reject_reward, outputs = self.concatenated_forward(
-                        self.model, packed_input_ids, packed_attention_masks, packed_seq_lens, None, return_output
-                    )
-
-                    if args.add_pretrain_loss:
+                    if not self.packing_samples:
+                        ptx_output = self.model.forward(chosen_ids, attention_mask=c_mask)
+                        ptx_label = torch.where(
+                            c_mask.bool(),
+                            chosen_ids,
+                            self.ptx_loss_fn.IGNORE_INDEX,
+                        ).to(torch.cuda.current_device())
+                        ptx_log_probs = ptx_output["logits"]
+                        chosen_reward_ptx_loss = self.ptx_loss_fn(ptx_log_probs, ptx_label, c_mask.bool())
+                    else:
                         # Extract chosen sequences for pretraining loss
                         num_sequences = len(packed_seq_lens)
                         num_chosen = num_sequences // 2
@@ -300,131 +238,21 @@ class GeneralPreferenceModelTrainer(ABC):
                             self.ptx_loss_fn.IGNORE_INDEX,
                         ).to(torch.cuda.current_device())
                         ptx_log_probs = ptx_output["logits"]
-                        chosen_reward_ptx_loss = self.ptx_loss_fn(
-                            ptx_log_probs,
-                            ptx_label,
-                            chosen_attn_mask.bool()
-                        )
-
-                if self.compute_fp32_loss:
-                    chosen_reward = chosen_reward.float()
-                    reject_reward = reject_reward.float()
-
-                if isinstance(self.loss_fn, HighDimGeneralPreferenceRegressionMoELoss) or isinstance(self.loss_fn, HighDimGeneralPreferenceMoELoss):
-                    chosen_last_hidden_states = outputs["last_hidden_state"][: chosen_ids.shape[0], :, :]
-                    prompt_end_index = chosen_last_hidden_states.size(1) - chosen_response_len - 1
-                    # Convert to long tensor for indexing
-                    prompt_end_index_expanded = prompt_end_index.unsqueeze(-1).expand(-1, -1, chosen_last_hidden_states.size(-1))
-                    # Before using the index tensor in torch.gather()
-                    prompt_end_index_expanded = prompt_end_index_expanded.long()
-
-                    # Ensure batch dimensions match between tensors
-                    if chosen_last_hidden_states.size(0) == 1:
-                        chosen_last_hidden_states = chosen_last_hidden_states.expand(prompt_end_index_expanded.size(0), -1, -1)
-                    prompt_hidden_state = torch.gather(chosen_last_hidden_states, dim=1, index=prompt_end_index_expanded).squeeze(1)
-                    preference_loss, probs = self.loss_fn(chosen_reward, reject_reward, prompt_hidden_state.to(torch.cuda.current_device()), margin)
-                else:
-                    preference_loss, probs = self.loss_fn(chosen_reward, reject_reward, margin)
-
-                # Calculate accuracy from per-sample probabilities
-                acc = (probs > 0.5).float().mean().item()
-                acc_mean = acc_mean * 0.9 + 0.1 * acc
-                prob_mean = prob_mean * 0.9 + 0.1 * probs.mean().item()
-                loss_mean = loss_mean * 0.9 + 0.1 * preference_loss.item()
-
-                if args.add_pretrain_loss:
-                    if isinstance(self.ptx_loss_fn, DPORefFreeLoss):
-                        if not self.packing_samples:
-                            chosen_output = self.model.forward(chosen_ids, attention_mask=c_mask)
-                            chosen_label = torch.where(
-                                c_mask.bool(),
-                                chosen_ids,
-                                self.ptx_loss_fn.IGNORE_INDEX,
-                            ).to(torch.cuda.current_device())
-                            chosen_log_probs = chosen_output["logits"]
-                            rejected_output = self.model.forward(reject_ids, attention_mask=r_mask)
-                            rejected_label = torch.where(
-                                r_mask.bool(),
-                                reject_ids,
-                                self.ptx_loss_fn.IGNORE_INDEX,
-                            ).to(torch.cuda.current_device())
-                            rejected_log_probs = rejected_output["logits"]
-                            chosen_reward_ptx_loss = self.ptx_loss_fn(
-                                chosen_log_probs, chosen_label, c_mask.bool(),
-                                rejected_log_probs, rejected_label, r_mask.bool()
-                            )
-                        else:
-                            # Extract chosen sequences for DPO pretraining loss
-                            num_sequences = len(packed_seq_lens)
-                            num_chosen = num_sequences // 2
-                            chosen_seq_lens = packed_seq_lens[:num_chosen]
-                            chosen_total_len = sum(chosen_seq_lens)
-                            
-                            chosen_ids = packed_input_ids[:, :chosen_total_len]
-                            chosen_attn_mask = packed_attention_masks[:, :chosen_total_len]
-                            rejected_ids = packed_input_ids[:, chosen_total_len:]
-                            rejected_attn_mask = packed_attention_masks[:, chosen_total_len:]
-                            
-                            chosen_output = self.model.forward(chosen_ids, attention_mask=chosen_attn_mask)
-                            rejected_output = self.model.forward(rejected_ids, attention_mask=rejected_attn_mask)
-                            
-                            chosen_label = torch.where(
-                                chosen_attn_mask.bool(),
-                                chosen_ids,
-                                self.ptx_loss_fn.IGNORE_INDEX,
-                            ).to(torch.cuda.current_device())
-                            rejected_label = torch.where(
-                                rejected_attn_mask.bool(),
-                                rejected_ids,
-                                self.ptx_loss_fn.IGNORE_INDEX,
-                            ).to(torch.cuda.current_device())
-                            
-                            chosen_reward_ptx_loss = self.ptx_loss_fn(
-                                chosen_output["logits"], chosen_label, chosen_attn_mask.bool(),
-                                rejected_output["logits"], rejected_label, rejected_attn_mask.bool()
-                            )
-                    else:
-                        if not self.packing_samples:
-                            ptx_output = self.model.forward(chosen_ids, attention_mask=c_mask)
-                            ptx_label = torch.where(
-                                c_mask.bool(),
-                                chosen_ids,
-                                self.ptx_loss_fn.IGNORE_INDEX,
-                            ).to(torch.cuda.current_device())
-                            ptx_log_probs = ptx_output["logits"]
-                            chosen_reward_ptx_loss = self.ptx_loss_fn(ptx_log_probs, ptx_label, c_mask.bool())
-                        else:
-                            # Extract chosen sequences for pretraining loss
-                            num_sequences = len(packed_seq_lens)
-                            num_chosen = num_sequences // 2
-                            chosen_seq_lens = packed_seq_lens[:num_chosen]
-                            chosen_total_len = sum(chosen_seq_lens)
-                            chosen_ids = packed_input_ids[:, :chosen_total_len]
-                            chosen_attn_mask = packed_attention_masks[:, :chosen_total_len]
-                            
-                            ptx_output = self.model.forward(chosen_ids, attention_mask=chosen_attn_mask)
-                            ptx_label = torch.where(
-                                chosen_attn_mask.bool(),
-                                chosen_ids,
-                                self.ptx_loss_fn.IGNORE_INDEX,
-                            ).to(torch.cuda.current_device())
-                            ptx_log_probs = ptx_output["logits"]
-                            chosen_reward_ptx_loss = self.ptx_loss_fn(ptx_log_probs, ptx_label, chosen_attn_mask.bool())
+                        chosen_reward_ptx_loss = self.ptx_loss_fn(ptx_log_probs, ptx_label, chosen_attn_mask.bool())
 
                     loss = (1 - args.ptx_loss_coef) * preference_loss + chosen_reward_ptx_loss * args.ptx_loss_coef
                 else:
                     loss = preference_loss
 
+                # Backward pass and optimization
                 self.strategy.backward(loss, self.model, self.optimizer)
-
-                # Optimizer step
                 self.strategy.optimizer_step(self.optimizer, self.model, self.scheduler)
 
-                # Update logs_dict to include the new metrics
+                # Update logs
                 logs_dict = {
                     "loss": preference_loss.item(),
                     "loss_mean": loss_mean,
-                    "lr": self.scheduler.get_last_lr()[0],  # Add learning rate to logs
+                    "lr": self.scheduler.get_last_lr()[0],
                     "acc": acc,
                     "acc_mean": acc_mean,
                     "probs": probs.mean().item(),
