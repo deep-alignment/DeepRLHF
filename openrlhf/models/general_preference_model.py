@@ -146,9 +146,21 @@ def _get_general_preference_model(base_causal_model, base_llm_model, is_general_
             input_ids: torch.LongTensor = None,
             attention_mask: Optional[torch.Tensor] = None,
             return_output=False,
+            ring_attn_group=None,
+            packed_seq_lens=None,
         ) -> torch.Tensor:
+            """Custom forward with support for ring attention and packed sequences"""
+            
+            # Set position ids based on attention mask
             position_ids = attention_mask.long().cumsum(-1) - 1
             position_ids.masked_fill_(attention_mask == 0, 1)
+
+            # Handle ring attention for packed sequences
+            if ring_attn_group is not None and packed_seq_lens is not None:
+                input_ids, attention_mask, position_ids = convert_ring_attn_params(
+                    input_ids, attention_mask, packed_seq_lens, ring_attn_group
+                )
+
             outputs = getattr(self, self.base_model_prefix)(
                 input_ids, attention_mask=attention_mask, position_ids=position_ids
             )
@@ -156,36 +168,28 @@ def _get_general_preference_model(base_causal_model, base_llm_model, is_general_
             
             if not self.is_general_preference:
                 values = self.value_head(last_hidden_states).squeeze(-1)
-                # left padding in training mode
                 if self.training:
                     reward = values[:, -1]
                 else:
                     eos_indices = attention_mask.size(1) - 1 - attention_mask.long().fliplr().argmax(dim=1, keepdim=True)
                     reward = values.gather(dim=1, index=eos_indices).squeeze(1)
-                if return_output:
-                    return reward, outputs
-                else:
-                    return reward, None
             else:
                 values = self.value_head(last_hidden_states)
-                # left padding in training mode
                 if self.training:
                     reward = values[:, -1, :]
                     if self.is_preference_embedding_normalized:
-                        reward = F.normalize(reward, p=2, dim=-1)  # Normalize reward
+                        reward = F.normalize(reward, p=2, dim=-1)
                 else:
                     eos_indices = attention_mask.size(1) - 1 - attention_mask.long().fliplr().argmax(dim=1)
-                    eos_indices = eos_indices.unsqueeze(1)  # Change shape to [batch_size, 1]                  
+                    eos_indices = eos_indices.unsqueeze(1)
                     reward_list = []
-                    for dim in range(value_head_dim):
+                    for dim in range(values.size(-1)):
                         reward_list.append(values[:,:,dim].gather(dim=1, index=eos_indices))
                     reward = torch.cat(reward_list, dim=1)
                     if self.is_preference_embedding_normalized:
-                        reward = F.normalize(reward, p=2, dim=-1)  # Normalize reward
-                if return_output:
-                    return reward, outputs
-                else:
-                    return reward, None
+                        reward = F.normalize(reward, p=2, dim=-1)
+
+            return (reward, outputs) if return_output else (reward, None)
         
         def create_skew_symmetric_block_matrix(self, dim, device, dtype, prompt_hidden_states):
             """

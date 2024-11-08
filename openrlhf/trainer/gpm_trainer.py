@@ -424,13 +424,13 @@ class GeneralPreferenceModelTrainer(ABC):
             chosen_rewards = all_values[: chosen_ids.shape[0]]
             rejected_rewards = all_values[chosen_ids.shape[0] :]
         else:
-            # Fix: Properly handle attention masks for packed sequences
+            # For packed samples, we need to use the actual sequence lengths to split rewards
             all_values, outputs = model.custom_forward(
                 chosen_ids, 
-                attention_mask=(c_mask > 0).float(),  # Fix: Ensure proper attention mask format
+                attention_mask=c_mask,
                 return_output=return_output,
-                ring_attn_group=self.strategy.ring_attn_group,
-                packed_seq_lens=reject_ids
+                ring_attn_group=self.strategy.ring_attn_group if hasattr(self.strategy, 'ring_attn_group') else None,
+                packed_seq_lens=reject_ids  # reject_ids contains packed_seq_lens
             )
             
             # Calculate number of chosen sequences (half of total sequences)
