@@ -44,6 +44,7 @@ class GeneralPreferenceModelTrainer(ABC):
         is_general_preference: bool = False,
         tau: float = 0.1,
         value_head_dim: int = 2,
+        packing_samples=False,
         
     ) -> None:
         super().__init__()
@@ -59,7 +60,7 @@ class GeneralPreferenceModelTrainer(ABC):
         self.is_general_preference = is_general_preference
 
         # Add packing samples flag
-        self.packing_samples = strategy.args.packing_samples
+        self.packing_samples = packing_samples
 
         if is_general_preference:
             if value_head_dim == 2 and not self.args.add_prompt_head:
@@ -163,9 +164,8 @@ class GeneralPreferenceModelTrainer(ABC):
                     chosen_response_len = torch.tensor(chosen_response_len).view(-1, 1).to(torch.cuda.current_device())
                 else:
                     packed_input_ids, packed_attention_masks, packed_seq_lens, margin, chosen_response_lens = data
-                    packed_input_ids, packed_attention_masks = packed_input_ids.to(
-                        torch.cuda.current_device()
-                    ), packed_attention_masks.to(torch.cuda.current_device())
+                    packed_input_ids = packed_input_ids.to(torch.cuda.current_device())
+                    packed_attention_masks = packed_attention_masks.to(torch.cuda.current_device())
                     chosen_response_len = torch.tensor(chosen_response_lens).view(-1, 1).to(torch.cuda.current_device())
 
                 if self.margin_loss:
@@ -175,13 +175,18 @@ class GeneralPreferenceModelTrainer(ABC):
 
                 return_output = True if isinstance(self.loss_fn, HighDimGeneralPreferenceRegressionMoELoss) or isinstance(self.loss_fn, HighDimGeneralPreferenceMoELoss) else False
                 
-                if not self.packing_samples:
-                    chosen_reward, reject_reward, outputs = self.concatenated_forward(
-                        self.model, chosen_ids, c_mask, reject_ids, r_mask, return_output
-                    )
+                chosen_reward, reject_reward, outputs = self.concatenated_forward(
+                    self.model,
+                    chosen_ids if not self.packing_samples else packed_input_ids,
+                    c_mask if not self.packing_samples else packed_attention_masks,
+                    reject_ids if not self.packing_samples else packed_seq_lens,
+                    r_mask if not self.packing_samples else None,
+                    return_output
+                )
 
-                    if args.add_pretrain_loss:
-                        if isinstance(self.ptx_loss_fn, DPORefFreeLoss):
+                if args.add_pretrain_loss:
+                    if isinstance(self.ptx_loss_fn, DPORefFreeLoss):
+                        if not self.packing_samples:
                             chosen_output = self.model.forward(chosen_ids, attention_mask=c_mask)
                             chosen_label = torch.where(
                                 c_mask.bool(),
