@@ -109,7 +109,7 @@ class GeneralPreferenceModelTrainer(ABC):
                 name="GPM" + \
                      ("_norm" if strategy.args.is_preference_embedding_normalized else "") + \
                      ("_gating" if strategy.args.add_prompt_head else "") + \
-                     f"_vdim{strategy.args.value_head_dim}_" + \
+                     f"_vdim{strategy.args.value_head_dim}" + \
                      ("_ptx" if strategy.args.add_pretrain_loss else "") + \
                      (f"{strategy.args.ptx_loss_coef}" if strategy.args.add_pretrain_loss else "") + \
                      "_M_" + str(strategy.args.pretrain) + "_D_" + \
