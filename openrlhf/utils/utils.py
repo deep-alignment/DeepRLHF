@@ -48,7 +48,7 @@ def blending_datasets(
     stopping_strategy="first_exhausted",
     train_split="train",
     eval_split="test",
-    train_split_ratio=1.0,  # Add this parameter
+    train_split_ratio=0.97,  # Add this parameter
 ):
     datasets = datasets.split(",")
     probabilities = list(map(float, probabilities.split(",")))
