@@ -20,6 +20,7 @@ openrlhf.cli.train_gpm \
    --group_size 1 \
    --value_head_dim 2 \
    --is_general_preference \
+   --is_preference_embedding_normalized \
    --return_prompt_length \
    --add_prompt_head \
    --add_pretrain_loss \
