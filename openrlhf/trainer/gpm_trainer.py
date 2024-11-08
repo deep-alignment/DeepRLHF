@@ -106,8 +106,8 @@ class GeneralPreferenceModelTrainer(ABC):
                 entity=strategy.args.wandb_org,
                 project=strategy.args.wandb_project,
                 group=strategy.args.wandb_group,
-                name="GPM_" + \
-                     ("norm" if strategy.args.is_preference_embedding_normalized else "") + \
+                name="GPM" + \
+                     ("_norm" if strategy.args.is_preference_embedding_normalized else "") + \
                      ("_gating" if strategy.args.add_prompt_head else "") + \
                      f"_vdim{strategy.args.value_head_dim}_" + \
                      ("_ptx" if strategy.args.add_pretrain_loss else "") + \
