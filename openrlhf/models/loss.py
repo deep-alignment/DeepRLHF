@@ -398,7 +398,7 @@ class PairWiseLoss(nn.Module):
     """
     Pairwise Loss for Reward Model
     """
-    def __init__(self, tau: float = 0.1):
+    def __init__(self, tau: float = 1.0):
         super().__init__()
         self.tau = tau
         
