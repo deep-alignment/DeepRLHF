@@ -388,36 +388,32 @@ class GeneralRewardDataset(Dataset):
         return chosen_ids, chosen_masks, reject_ids, reject_masks, margins, chosen_response_lens
 
     def packing_collate_fn(self, item_list):
-        extras = []
-        chosen_response_lens = []
-        
         chosen_ids = []
-        chosen_att_masks = []
+        chosen_att_masks = [] 
         chosen_seq_lens = []
         rejected_ids = []
-        rejected_att_masks = [] 
+        rejected_att_masks = []
         rejected_seq_lens = []
-        
-        # Fix: Use consistent indexing for attention masks
+        margins = []
+        chosen_response_lens = []
+
         for idx, (chosen_id, chosen_mask, reject_id, reject_mask, margin, chosen_response_len) in enumerate(item_list):
             # Add chosen sequence
             chosen_ids.append(chosen_id.flatten())
             chosen_att_masks.append(torch.ones_like(chosen_id.flatten()) * (idx + 1))
             chosen_seq_lens.append(len(chosen_id.flatten()))
-            extras.append(margin)
+            margins.append(margin)
             chosen_response_lens.append(chosen_response_len)
 
             # Add rejected sequence
             rejected_ids.append(reject_id.flatten())
-            rejected_att_masks.append(torch.ones_like(reject_id.flatten()) * (idx + 1))
+            rejected_att_masks.append(torch.ones_like(reject_id.flatten()) * (idx + len(item_list) + 1))
             rejected_seq_lens.append(len(reject_id.flatten()))
 
-        # Concatenate and handle padding
         packed_input_ids = torch.cat(chosen_ids + rejected_ids, dim=0).unsqueeze(0)
         packed_attention_masks = torch.cat(chosen_att_masks + rejected_att_masks, dim=0).unsqueeze(0)
         packed_seq_lens = chosen_seq_lens + rejected_seq_lens
 
-        # Fix: Better padding handling for flash attention
         if self.multiple_of > 1:
             total_len = packed_input_ids.size(1)
             pad_len = (self.multiple_of - total_len % self.multiple_of) % self.multiple_of
@@ -425,4 +421,4 @@ class GeneralRewardDataset(Dataset):
                 packed_input_ids = F.pad(packed_input_ids, (0, pad_len), value=self.tokenizer.pad_token_id)
                 packed_attention_masks = F.pad(packed_attention_masks, (0, pad_len), value=0)
 
-        return packed_input_ids, packed_attention_masks, packed_seq_lens, extras, chosen_response_lens
+        return packed_input_ids, packed_attention_masks, packed_seq_lens, margins, chosen_response_lens

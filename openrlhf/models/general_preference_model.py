@@ -11,6 +11,9 @@ from transformers.integrations.deepspeed import HfDeepSpeedConfig
 from openrlhf.utils.logging_utils import init_logger
 import torch.nn.functional as F
 
+from .ring_attn_utils import convert_ring_attn_params
+from .utils import reset_position_ids
+
 logger = init_logger(__name__)
 
 # Construct reward model with a value head for sequence classification. (model also with a lm head) 
@@ -141,54 +144,43 @@ def _get_general_preference_model(base_causal_model, base_llm_model, is_general_
             
             self.post_init()
 
-        def custom_forward(
-            self,
-            input_ids: torch.LongTensor = None,
-            attention_mask: Optional[torch.Tensor] = None,
-            return_output=False,
-            ring_attn_group=None,
-            packed_seq_lens=None,
-        ) -> torch.Tensor:
+        def custom_forward(self, input_ids, attention_mask, return_output=False, ring_attn_group=None, packed_seq_lens=None):
             """Custom forward with support for ring attention and packed sequences"""
             
-            # Set position ids based on attention mask
-            position_ids = attention_mask.long().cumsum(-1) - 1
-            position_ids.masked_fill_(attention_mask == 0, 1)
-
-            # Handle ring attention for packed sequences
-            if ring_attn_group is not None and packed_seq_lens is not None:
-                input_ids, attention_mask, position_ids = convert_ring_attn_params(
-                    input_ids, attention_mask, packed_seq_lens, ring_attn_group
-                )
+            # Set position ids based on attention mask (for both packed and unpacked)
+            if packed_seq_lens is None:
+                # Regular processing
+                position_ids = attention_mask.long().cumsum(-1) - 1
+                position_ids.masked_fill_(attention_mask == 0, 1)
+            else:
+                # For packed sequences, reset position IDs at each sequence boundary
+                position_ids = reset_position_ids(attention_mask)
+                
+                if ring_attn_group is not None:
+                    input_ids, attention_mask, position_ids = convert_ring_attn_params(
+                        input_ids, attention_mask, packed_seq_lens, ring_attn_group
+                    )
 
             outputs = getattr(self, self.base_model_prefix)(
                 input_ids, attention_mask=attention_mask, position_ids=position_ids
             )
-            last_hidden_states = outputs["last_hidden_state"]
             
-            if not self.is_general_preference:
-                values = self.value_head(last_hidden_states).squeeze(-1)
-                if self.training:
-                    reward = values[:, -1]
-                else:
-                    eos_indices = attention_mask.size(1) - 1 - attention_mask.long().fliplr().argmax(dim=1, keepdim=True)
-                    reward = values.gather(dim=1, index=eos_indices).squeeze(1)
-            else:
-                values = self.value_head(last_hidden_states)
-                if self.training:
-                    reward = values[:, -1, :]
-                    if self.is_preference_embedding_normalized:
-                        reward = F.normalize(reward, p=2, dim=-1)
-                else:
-                    eos_indices = attention_mask.size(1) - 1 - attention_mask.long().fliplr().argmax(dim=1)
-                    eos_indices = eos_indices.unsqueeze(1)
-                    reward_list = []
-                    for dim in range(values.size(-1)):
-                        reward_list.append(values[:,:,dim].gather(dim=1, index=eos_indices))
-                    reward = torch.cat(reward_list, dim=1)
-                    if self.is_preference_embedding_normalized:
-                        reward = F.normalize(reward, p=2, dim=-1)
+            last_hidden_states = outputs["last_hidden_state"]
+            values = self.value_head(last_hidden_states)
 
+            if packed_seq_lens is not None:
+                # For packed sequences, get rewards at sequence boundaries
+                packed_seq_lens = torch.tensor(packed_seq_lens, device=values.device)
+                eos_indices = packed_seq_lens.cumsum(dim=0) - 1
+                reward = values.squeeze(0).gather(dim=0, index=eos_indices.unsqueeze(-1).expand(-1, values.size(-1)))
+            else:
+                # Regular processing for unpacked sequences
+                eos_indices = attention_mask.size(1) - 1 - attention_mask.long().fliplr().argmax(dim=1, keepdim=True)
+                reward = values.gather(dim=1, index=eos_indices.unsqueeze(-1).expand(-1, -1, values.size(-1))).squeeze(1)
+
+            if self.is_preference_embedding_normalized:
+                reward = F.normalize(reward, p=2, dim=-1)
+                
             return (reward, outputs) if return_output else (reward, None)
         
         def create_skew_symmetric_block_matrix(self, dim, device, dtype, prompt_hidden_states):

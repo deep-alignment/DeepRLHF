@@ -467,28 +467,27 @@ class GeneralPreferenceModelTrainer(ABC):
             return loss_mean
 
     def concatenated_forward(self, model, chosen_ids, c_mask, reject_ids, r_mask, return_output: bool = False):
-        """Run the given model on concatenated inputs"""
+        """Run the given model on concatenated inputs or packed samples"""
         if not self.packing_samples:
+            # Original concatenated handling
             input_ids, att_masks = self.concatenated_inputs(chosen_ids, c_mask, reject_ids, r_mask)
             all_values, outputs = model.custom_forward(input_ids, attention_mask=att_masks, return_output=return_output)
             chosen_rewards = all_values[: chosen_ids.shape[0]]
             rejected_rewards = all_values[chosen_ids.shape[0] :]
         else:
-            # For packed samples, we need to use the actual sequence lengths to split rewards
+            # For packed samples
             all_values, outputs = model.custom_forward(
-                chosen_ids, 
+                chosen_ids,  # Contains packed input ids 
                 attention_mask=c_mask,
                 return_output=return_output,
                 ring_attn_group=self.strategy.ring_attn_group if hasattr(self.strategy, 'ring_attn_group') else None,
-                packed_seq_lens=reject_ids  # reject_ids contains packed_seq_lens
+                packed_seq_lens=reject_ids  # Contains packed sequence lengths
             )
             
-            # Calculate number of chosen sequences (half of total sequences)
-            num_sequences = len(reject_ids)  # reject_ids contains packed_seq_lens
-            num_chosen = num_sequences // 2
-            
             # Split rewards between chosen and rejected
-            chosen_rewards = all_values[:num_chosen]
+            num_sequences = len(reject_ids)  # reject_ids contains packed sequence lengths
+            num_chosen = num_sequences // 2
+            chosen_rewards = all_values[:num_chosen] 
             rejected_rewards = all_values[num_chosen:num_sequences]
 
         return chosen_rewards, rejected_rewards, outputs
