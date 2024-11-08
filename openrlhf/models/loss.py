@@ -406,13 +406,12 @@ class PairWiseLoss(nn.Module):
         self, chosen_reward: torch.Tensor, reject_reward: torch.Tensor, margin: torch.Tensor = None
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         if margin is not None:
-            loss = -F.logsigmoid((chosen_reward - reject_reward - margin) / self.tau)
-            prob = F.sigmoid((chosen_reward - reject_reward - margin) / self.tau)
+            relative_score = (chosen_reward - reject_reward - margin) / self.tau
         else:
-            loss = -F.logsigmoid((chosen_reward - reject_reward) / self.tau)
-            prob = F.sigmoid((chosen_reward - reject_reward) / self.tau)
-        # Return per-sample loss and per-sample probabilities
-        return loss.mean(), prob
+            relative_score = (chosen_reward - reject_reward) / self.tau
+            
+        loss = -F.logsigmoid(relative_score)
+        return loss.mean(), relative_score
 
 class PairWiseRegressionLoss(nn.Module):
     """
@@ -496,13 +495,12 @@ class GeneralPreferenceLoss(nn.Module):
         # Calculate per-sample preferences without mean
         result = chosen_reward[:, 0] * reject_reward[:, 1] - chosen_reward[:, 1] * reject_reward[:, 0]
         if margin is not None:
-            loss = -F.logsigmoid((result - margin) / self.tau)
-            prob = F.sigmoid((result - margin) / self.tau)
+            relative_score = (result - margin) / self.tau
         else:
-            loss = -F.logsigmoid(result / self.tau)
-            prob = F.sigmoid(result / self.tau)
-        # Return per-sample loss mean and per-sample probabilities
-        return loss.mean(), prob
+            relative_score = result / self.tau
+            
+        loss = -F.logsigmoid(relative_score)
+        return loss.mean(), relative_score
     
 class GeneralPreferenceRegressionLoss(nn.Module):
     """
@@ -540,14 +538,13 @@ class GeneralPreferenceLearnableTauLoss(nn.Module):
         real_tau = max(-F.logsigmoid(-self.tau), 1e-2)
         if margin is not None:
             result = chosen_reward[:, 0] * reject_reward[:, 1] - chosen_reward[:, 1] * reject_reward[:, 0]
-            loss = -F.logsigmoid((result - margin) / real_tau)
-            prob = F.sigmoid((result - margin) / real_tau)
+            relative_score = (result - margin) / real_tau
         else:
             result = chosen_reward[:, 0] * reject_reward[:, 1] - chosen_reward[:, 1] * reject_reward[:, 0]
-            loss = -F.logsigmoid(result / real_tau)
-            prob = F.sigmoid(result / real_tau)
-        
-        return loss.mean(), prob
+            relative_score = result / real_tau
+            
+        loss = -F.logsigmoid(relative_score)
+        return loss.mean(), relative_score
     
 class GeneralPreferenceLearnableTauRegressionLoss(nn.Module):
     """
@@ -600,14 +597,12 @@ class HighDimGeneralPreferenceLoss(nn.Module):
             result = result.view(chosen_reward.shape[0])
             
         if margin is not None:
-            loss = -F.logsigmoid((result - margin) / self.tau)
-            prob = F.sigmoid((result - margin) / self.tau)
+            relative_score = (result - margin) / self.tau
         else:
-            loss = -F.logsigmoid(result / self.tau)
-            prob = F.sigmoid(result / self.tau)
+            relative_score = result / self.tau
             
-        # Return per-sample loss mean and per-sample probabilities 
-        return loss.mean(), prob
+        loss = -F.logsigmoid(relative_score)
+        return loss.mean(), relative_score
     
 class HighDimGeneralPreferenceRegressionLoss(nn.Module):
     """
@@ -680,17 +675,17 @@ class HighDimGeneralPreferenceLearnableTauLoss(nn.Module):
                 transformed_chosen = torch.matmul(chosen_reward, R_matrix.T)
                 result = torch.bmm(transformed_chosen.view(chosen_reward.shape[0], 1, self.value_head_dim), reject_reward.view(reject_reward.shape[0], self.value_head_dim, 1))
                 result = result.view(chosen_reward.shape[0])              
-            loss = -F.logsigmoid((result - margin) / self.scale) 
-            prob = F.sigmoid((result - margin) / self.scale)
+            relative_score = (result - margin) / self.scale
         else:
             R_matrix = self.create_skew_symmetric_block_matrix(self.value_head_dim, chosen_reward.device, chosen_reward.dtype)
             if chosen_reward.device == reject_reward.device == R_matrix.device:
                 transformed_chosen = torch.matmul(chosen_reward, R_matrix.T)
                 result = torch.bmm(transformed_chosen.view(chosen_reward.shape[0], 1, self.value_head_dim), reject_reward.view(reject_reward.shape[0], self.value_head_dim, 1))
                 result = result.view(chosen_reward.shape[0])  
-            loss = -F.logsigmoid(result / self.scale)
-            prob = F.sigmoid(result / self.scale)
-        return loss.mean(), prob
+            relative_score = result / self.scale
+            
+        loss = -F.logsigmoid(relative_score)
+        return loss.mean(), relative_score
     
 class HighDimGeneralPreferenceMoELoss(nn.Module):
     """
@@ -714,14 +709,12 @@ class HighDimGeneralPreferenceMoELoss(nn.Module):
             result = result.view(chosen_reward.shape[0])
             
         if margin is not None:
-            loss = -F.logsigmoid((result - margin) / self.softmax_tau)
-            prob = F.sigmoid((result - margin) / self.softmax_tau)
+            relative_score = (result - margin) / self.softmax_tau
         else:
-            loss = -F.logsigmoid(result / self.softmax_tau)
-            prob = F.sigmoid(result / self.softmax_tau)
+            relative_score = result / self.softmax_tau
             
-        # Return per-sample loss mean and per-sample probabilities
-        return loss.mean(), prob
+        loss = -F.logsigmoid(relative_score)
+        return loss.mean(), relative_score
     
 class HighDimGeneralPreferenceRegressionMoELoss(nn.Module):
     """

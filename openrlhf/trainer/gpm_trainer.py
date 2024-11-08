@@ -163,6 +163,7 @@ class GeneralPreferenceModelTrainer(ABC):
             acc_mean = 0
             prob_mean = 0
             loss_mean = 0
+            relative_score_mean = 0  # Add new tracking metric
 
             for data in self.train_dataloader:
                 # Process input data based on packing mode
@@ -211,15 +212,19 @@ class GeneralPreferenceModelTrainer(ABC):
                     reject_reward = reject_reward.float()
                     
                 if isinstance(self.loss_fn, (HighDimGeneralPreferenceRegressionMoELoss, HighDimGeneralPreferenceMoELoss)):
-                    preference_loss, probs = self.loss_fn(chosen_reward, reject_reward, prompt_hidden_state.to(torch.cuda.current_device()), margin)
+                    preference_loss, relative_score = self.loss_fn(chosen_reward, reject_reward, prompt_hidden_state.to(torch.cuda.current_device()), margin)
                 else:
-                    preference_loss, probs = self.loss_fn(chosen_reward, reject_reward, margin)
+                    preference_loss, relative_score = self.loss_fn(chosen_reward, reject_reward, margin)
+
+                # Calculate probabilities from relative scores
+                probs = torch.sigmoid(relative_score)
 
                 # Calculate metrics
                 acc = (probs > 0.5).float().mean().item()
                 acc_mean = acc_mean * 0.9 + 0.1 * acc
                 prob_mean = prob_mean * 0.9 + 0.1 * probs.mean().item()
                 loss_mean = loss_mean * 0.9 + 0.1 * preference_loss.item()
+                relative_score_mean = relative_score_mean * 0.9 + 0.1 * relative_score.mean().item()
 
                 # Add pretrain loss if enabled
                 if args.add_pretrain_loss:
@@ -267,6 +272,8 @@ class GeneralPreferenceModelTrainer(ABC):
                     "acc_mean": acc_mean,
                     "probs": probs.mean().item(),
                     "prob_mean": prob_mean,
+                    "relative_score": relative_score.mean().item(),
+                    "relative_score_mean": relative_score_mean,
                 }
 
                 # logs/checkpoints/evaluation
@@ -321,6 +328,8 @@ class GeneralPreferenceModelTrainer(ABC):
             rewards = []
             loss_sum = 0
             prob_sum = 0
+            relative_score_sum = 0  # Add tracking for relative scores
+
             for data in eval_dataloader:
                 if not self.packing_samples:
                     chosen_ids, c_mask, reject_ids, r_mask, margin, chosen_response_len = data
@@ -358,23 +367,27 @@ class GeneralPreferenceModelTrainer(ABC):
                 if chosen_last_hidden_states.size(0) == 1:
                     chosen_last_hidden_states = chosen_last_hidden_states.expand(prompt_end_index_expanded.size(0), -1, -1)
                 prompt_hidden_state = torch.gather(chosen_last_hidden_states, 1, prompt_end_index_expanded).squeeze(1)
-                preference_loss, prob = self.loss_fn(chosen_reward, reject_reward, prompt_hidden_state, margin)
+                preference_loss, relative_score = self.loss_fn(chosen_reward, reject_reward, prompt_hidden_state, margin)
             else:
-                preference_loss, prob = self.loss_fn(chosen_reward, reject_reward, margin)
+                preference_loss, relative_score = self.loss_fn(chosen_reward, reject_reward, margin)
                 
+            probs = torch.sigmoid(relative_score)
+            
             loss = preference_loss
 
             # Collect statistics
             rewards += [chosen_reward.flatten(), reject_reward.flatten()]
-            acc += (prob > 0.5).float().mean().item()
+            acc += (probs > 0.5).float().mean().item()
             loss_sum += loss.item()
-            prob_sum += prob.mean().item()
-              
+            prob_sum += probs.mean().item()
+            relative_score_sum += relative_score.mean().item()  # Calculate relative score
+
             step_bar.update()
 
         acc_mean = acc / eval_dataloader.__len__()
         loss_mean = loss_sum / eval_dataloader.__len__() 
         prob_mean = prob_sum / eval_dataloader.__len__()
+        relative_score_mean = relative_score_sum / eval_dataloader.__len__()  # Calculate mean relative score
 
         # Calculate reward statistics
         rewards = torch.cat(rewards).float()
@@ -394,6 +407,7 @@ class GeneralPreferenceModelTrainer(ABC):
             "prob_mean": prob_mean,
             "reward_mean": reward_mean.item(),
             "reward_std": reward_std.item(),
+            "relative_score_mean": relative_score_mean,
         }
         logs = self.strategy.all_reduce(bar_dict)
         step_bar.set_postfix(logs)
