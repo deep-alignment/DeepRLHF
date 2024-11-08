@@ -163,6 +163,7 @@ class GeneralPreferenceModelTrainer(ABC):
                     c_mask = c_mask.squeeze(1).to(torch.cuda.current_device())
                     reject_ids = reject_ids.squeeze(1).to(torch.cuda.current_device())
                     r_mask = r_mask.squeeze(1).to(torch.cuda.current_device())
+                    margin = torch.tensor(margin, device=torch.cuda.current_device()) if margin else None
                     chosen_response_len = torch.tensor(chosen_response_len).view(-1, 1).to(torch.cuda.current_device())
 
                     chosen_reward, reject_reward, outputs = self.concatenated_forward(
@@ -172,6 +173,7 @@ class GeneralPreferenceModelTrainer(ABC):
                     packed_input_ids, packed_attention_masks, packed_seq_lens, margin, chosen_response_lens = data
                     packed_input_ids = packed_input_ids.to(torch.cuda.current_device())
                     packed_attention_masks = packed_attention_masks.to(torch.cuda.current_device())
+                    margin = torch.tensor(margin, device=torch.cuda.current_device()) if margin else None 
                     chosen_response_len = torch.tensor(chosen_response_lens).view(-1, 1).to(torch.cuda.current_device())
 
                     chosen_reward, reject_reward, outputs = self.concatenated_forward(
@@ -193,7 +195,7 @@ class GeneralPreferenceModelTrainer(ABC):
                         hidden_states = hidden_states.expand(prompt_end_index_expanded.size(0), -1, -1)
                         
                     prompt_hidden_state = torch.gather(hidden_states, 1, prompt_end_index_expanded).squeeze(1)
-                    preference_loss, probs = self.loss_fn(chosen_reward, reject_reward, prompt_hidden_state.to(torch.cuda.current_device()), margin)
+                    preference_loss, probs = self.loss_fn(chosen_reward, reject_reward, prompt_hidden_state, margin)
                 else:
                     preference_loss, probs = self.loss_fn(chosen_reward, reject_reward, margin)
 
@@ -460,15 +462,15 @@ class GeneralPreferenceModelTrainer(ABC):
                     c_mask = c_mask.squeeze(1).to(torch.cuda.current_device())
                     reject_ids = reject_ids.squeeze(1).to(torch.cuda.current_device())
                     r_mask = r_mask.squeeze(1).to(torch.cuda.current_device())
+                    margin = torch.tensor(margin, device=torch.cuda.current_device()) if margin else None
                     chosen_response_len = torch.tensor(chosen_response_len).view(-1, 1).to(torch.cuda.current_device())
                 else:
                     packed_input_ids, packed_attention_masks, packed_seq_lens, margin, chosen_response_lens = data
                     packed_input_ids, packed_attention_masks = packed_input_ids.to(
                         torch.cuda.current_device()
                     ), packed_attention_masks.to(torch.cuda.current_device())
+                    margin = torch.tensor(margin, device=torch.cuda.current_device()) if margin else None
                     chosen_response_len = torch.tensor(chosen_response_lens).view(-1, 1).to(torch.cuda.current_device())
-
-                margin = torch.tensor(margin).to(torch.cuda.current_device())
 
                 return_output = True if isinstance(self.loss_fn, HighDimGeneralPreferenceRegressionMoELoss) else False
                 if not self.packing_samples:
