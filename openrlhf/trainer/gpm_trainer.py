@@ -305,6 +305,10 @@ class GeneralPreferenceModelTrainer(ABC):
             )
 
     def evaluate(self, eval_dataloader, steps=0):
+        if not eval_dataloader or len(eval_dataloader) == 0:
+            self.strategy.print("Warning: Skipping evaluation due to empty eval_dataloader")
+            return
+
         step_bar = tqdm(
             range(eval_dataloader.__len__()),
             desc="Eval stage of steps %d" % steps,
@@ -313,6 +317,8 @@ class GeneralPreferenceModelTrainer(ABC):
         
         self.model.eval()
         with torch.no_grad():
+            acc = 0
+            rewards = []
             loss_sum = 0
             prob_sum = 0
             for data in eval_dataloader:
@@ -332,56 +338,79 @@ class GeneralPreferenceModelTrainer(ABC):
                     margin = torch.tensor(margin, device=torch.cuda.current_device()) if margin else None
                     chosen_response_len = torch.tensor(chosen_response_lens).view(-1, 1).to(torch.cuda.current_device())
 
-                return_output = True if isinstance(self.loss_fn, HighDimGeneralPreferenceRegressionMoELoss) else False
-                if not self.packing_samples:
-                    chosen_reward, reject_reward, outputs = self.concatenated_forward(
-                        self.model, chosen_ids, c_mask, reject_ids, r_mask, return_output
-                    )
-                else:
-                    chosen_reward, reject_reward, outputs = self.concatenated_forward(
-                        self.model, packed_input_ids, packed_attention_masks, packed_seq_lens, None, return_output
-                    )
+            return_output = True if isinstance(self.loss_fn, HighDimGeneralPreferenceRegressionMoELoss) else False
+            if not self.packing_samples:
+                chosen_reward, reject_reward, outputs = self.concatenated_forward(
+                    self.model, chosen_ids, c_mask, reject_ids, r_mask, return_output
+                )
+            else:
+                chosen_reward, reject_reward, outputs = self.concatenated_forward(
+                    self.model, packed_input_ids, packed_attention_masks, packed_seq_lens, None, return_output
+                )
+            
+            if isinstance(self.loss_fn, HighDimGeneralPreferenceRegressionMoELoss):
+                batch_size = len(packed_seq_lens) // 2 if self.packing_samples else chosen_ids.shape[0]
+                chosen_last_hidden_states = outputs["last_hidden_state"][:batch_size, :, :]
+                prompt_len = chosen_last_hidden_states.size(1) - chosen_response_len
+                prompt_len_expanded = prompt_len.unsqueeze(-1).expand(-1, -1, chosen_last_hidden_states.size(-1))
+                prompt_len_expanded = prompt_len_expanded.long()
+
+                if chosen_last_hidden_states.size(0) == 1:
+                    chosen_last_hidden_states = chosen_last_hidden_states.expand(prompt_len_expanded.size(0), -1, -1)
+                prompt_hidden_state = torch.gather(chosen_last_hidden_states, dim=1, index=prompt_len_expanded).squeeze(1)
+                preference_loss, prob = self.loss_fn(chosen_reward, reject_reward, prompt_hidden_state, margin)
+            else:
+                preference_loss, prob = self.loss_fn(chosen_reward, reject_reward, margin)
                 
-                if isinstance(self.loss_fn, HighDimGeneralPreferenceRegressionMoELoss):
-                    chosen_last_hidden_states = outputs["last_hidden_state"][: chosen_ids.shape[0], :, :]
-                    prompt_len = chosen_last_hidden_states.size(1) - chosen_response_len
-                    # Convert to long tensor for indexing
-                    prompt_len_expanded = prompt_len.unsqueeze(-1).expand(-1, -1, chosen_last_hidden_states.size(-1))
-                    # Before using the index tensor in torch.gather()
-                    prompt_len_expanded = prompt_len_expanded.long()
+            loss = preference_loss
 
-                    # Ensure batch dimensions match between tensors
-                    if chosen_last_hidden_states.size(0) == 1:
-                        chosen_last_hidden_states = chosen_last_hidden_states.expand(prompt_len_expanded.size(0), -1, -1)
-                    prompt_hidden_state = torch.gather(chosen_last_hidden_states, dim=1, index=prompt_len_expanded).squeeze(1)
-                    preference_loss, prob = self.loss_fn(chosen_reward, reject_reward, prompt_hidden_state, margin)
-                else:
-                    preference_loss, prob = self.loss_fn(chosen_reward, reject_reward, margin)
-                    
-                loss = preference_loss
+            # Collect statistics
+            rewards += [chosen_reward.flatten(), reject_reward.flatten()]
+            acc += (prob > 0.5).float().mean().item()
+            loss_sum += loss.item()
+            prob_sum += prob.mean().item()
+              
+            step_bar.update()
 
-                loss_sum += loss.item() 
-                prob_sum += prob.item() 
-                  
-                step_bar.update()
+        acc_mean = acc / eval_dataloader.__len__()
+        loss_mean = loss_sum / eval_dataloader.__len__() 
+        prob_mean = prob_sum / eval_dataloader.__len__()
 
-            loss_mean = loss_sum / self.eval_dataloader.__len__()
-            prob_mean = prob_sum / self.eval_dataloader.__len__()
+        # Calculate reward statistics
+        rewards = torch.cat(rewards).float()
+        rewards = self.strategy.all_gather(rewards)
+        reward_mean = torch.mean(rewards)
+        reward_std = torch.std(rewards).clamp(min=1e-8)
 
-            bar_dict = {
-                "eval_loss_mean": loss_mean,
-                "prob_mean": prob_mean,
-            }
-            logs = self.strategy.all_reduce(bar_dict)
-            step_bar.set_postfix(logs)
+        # Update model config with reward statistics
+        self.strategy.print("Set reward mean std")
+        unwrap_model = self.strategy._unwrap_model(self.model)
+        unwrap_model.config.mean = reward_mean.item()
+        unwrap_model.config.std = reward_std.item()
 
-            if self._wandb is not None and self.strategy.is_rank_0():
+        bar_dict = {
+            "eval_loss": loss_mean,
+            "acc_mean": acc_mean,
+            "prob_mean": prob_mean,
+            "reward_mean": reward_mean.item(),
+            "reward_std": reward_std.item(),
+        }
+        logs = self.strategy.all_reduce(bar_dict)
+        step_bar.set_postfix(logs)
+
+        # Print reward distribution histogram
+        histgram = torch.histogram(rewards.cpu(), bins=10, range=(-10, 10), density=True) * 2
+        self.strategy.print("histgram")
+        self.strategy.print(histgram)
+
+        if self.strategy.is_rank_0():
+            if self._wandb is not None:
                 logs = {"eval/%s" % k: v for k, v in {**logs, "global_step": steps}.items()}
                 self._wandb.log(logs)
 
         self.model.train()  # reset model state
-        torch.cuda.empty_cache() 
-        if self.strategy.is_rank_0():  
+        torch.cuda.empty_cache()
+        if self.strategy.is_rank_0():
             return loss_mean
 
     def concatenated_forward(self, model, chosen_ids, c_mask, reject_ids, r_mask, return_output: bool = False):
