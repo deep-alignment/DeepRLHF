@@ -18,7 +18,7 @@ openrlhf.cli.train_gpm \
    --general_preference_tau 0.1 \
    --dataset_probs 1 \
    --group_size 1 \
-   --value_head_dim 2 \
+   --value_head_dim 4 \
    --is_general_preference \
    --is_preference_embedding_normalized \
    --return_prompt_length \

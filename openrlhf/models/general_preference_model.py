@@ -13,6 +13,7 @@ import torch.nn.functional as F
 
 from .ring_attn_utils import convert_ring_attn_params
 from .utils import reset_position_ids
+import math
 
 logger = init_logger(__name__)
 
@@ -197,13 +198,14 @@ def _get_general_preference_model(base_causal_model, base_llm_model, is_general_
             """
             if hasattr(self, 'prompt_head'):
                 batch_size = prompt_hidden_states.shape[0]
+                hidden_dim = prompt_hidden_states.shape[1]
                 
                 # Ensure that dim is even, as we're creating blocks of size 2x2
                 assert dim % 2 == 0, "dim must be even for skew-symmetric block generation"
 
                 # Pass through the linear layer to get the block diagonal entries (half of the matrix's off-diagonal blocks)
                 block_values = self.prompt_head(prompt_hidden_states).view(batch_size, dim // 2)
-                block_values = torch.softmax(block_values, dim=-1)
+                block_values = torch.sigmoid(block_values / math.sqrt(hidden_dim), dim=-1)
                 
                 # Create a batch of zero matrices [batch_size, dim, dim]
                 batch_R_matrices = torch.zeros((batch_size, dim, dim), device=device, dtype=dtype)
