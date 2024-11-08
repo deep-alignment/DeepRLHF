@@ -161,6 +161,24 @@ class GeneralPreferenceModelTrainer(ABC):
                     reject_ids = reject_ids.squeeze(1).to(torch.cuda.current_device())
                     r_mask = r_mask.squeeze(1).to(torch.cuda.current_device())
                     chosen_response_len = torch.tensor(chosen_response_len).view(-1, 1).to(torch.cuda.current_device())
+                else:
+                    packed_input_ids, packed_attention_masks, packed_seq_lens, margin, chosen_response_lens = data
+                    packed_input_ids, packed_attention_masks = packed_input_ids.to(
+                        torch.cuda.current_device()
+                    ), packed_attention_masks.to(torch.cuda.current_device())
+                    chosen_response_len = torch.tensor(chosen_response_lens).view(-1, 1).to(torch.cuda.current_device())
+
+                if self.margin_loss:
+                    margin = torch.tensor(margin).to(torch.cuda.current_device())
+                else:
+                    margin = None
+
+                return_output = True if isinstance(self.loss_fn, HighDimGeneralPreferenceRegressionMoELoss) or isinstance(self.loss_fn, HighDimGeneralPreferenceMoELoss) else False
+                
+                if not self.packing_samples:
+                    chosen_reward, reject_reward, outputs = self.concatenated_forward(
+                        self.model, chosen_ids, c_mask, reject_ids, r_mask, return_output
+                    )
 
                     if args.add_pretrain_loss:
                         if isinstance(self.ptx_loss_fn, DPORefFreeLoss):
@@ -189,27 +207,18 @@ class GeneralPreferenceModelTrainer(ABC):
                             ptx_log_probs = ptx_output["logits"]
                             chosen_reward_ptx_loss = self.ptx_loss_fn(ptx_log_probs, ptx_label, c_mask.bool())
                 else:
-                    packed_input_ids, packed_attention_masks, packed_seq_lens, margin, chosen_response_lens = data
-                    packed_input_ids, packed_attention_masks = packed_input_ids.to(
-                        torch.cuda.current_device()
-                    ), packed_attention_masks.to(torch.cuda.current_device())
-                    chosen_response_len = torch.tensor(chosen_response_lens).view(-1, 1).to(torch.cuda.current_device())
+                    chosen_reward, reject_reward, outputs = self.concatenated_forward(
+                        self.model, packed_input_ids, packed_attention_masks, packed_seq_lens, None, return_output
+                    )
 
                     if args.add_pretrain_loss:
-                        # Fix: Properly handle packed sequences for pretraining loss
+                        # Extract chosen sequences for pretraining loss
                         num_sequences = len(packed_seq_lens)
                         num_chosen = num_sequences // 2
-                        
-                        # Get chosen sequences
                         chosen_seq_lens = packed_seq_lens[:num_chosen]
-                        chosen_start = 0
                         chosen_total_len = sum(chosen_seq_lens)
-                        
                         chosen_ids = packed_input_ids[:, :chosen_total_len]
                         chosen_attn_mask = packed_attention_masks[:, :chosen_total_len]
-                        
-                        # Fix: Create proper attention mask for packed sequences
-                        chosen_attn_mask = (chosen_attn_mask > 0).float()
                         
                         ptx_output = self.model.forward(chosen_ids, attention_mask=chosen_attn_mask)
                         ptx_label = torch.where(
@@ -223,22 +232,6 @@ class GeneralPreferenceModelTrainer(ABC):
                             ptx_label,
                             chosen_attn_mask.bool()
                         )
-
-                if self.margin_loss:
-                    margin = torch.tensor(margin).to(torch.cuda.current_device())
-                else:
-                    margin = None
-
-                return_output = True if isinstance(self.loss_fn, HighDimGeneralPreferenceRegressionMoELoss) or isinstance(self.loss_fn, HighDimGeneralPreferenceMoELoss) else False
-                
-                if not self.packing_samples:
-                    chosen_reward, reject_reward, outputs = self.concatenated_forward(
-                        self.model, chosen_ids, c_mask, reject_ids, r_mask, return_output
-                    )
-                else:
-                    chosen_reward, reject_reward, outputs = self.concatenated_forward(
-                        self.model, packed_input_ids, packed_attention_masks, packed_seq_lens, None, return_output
-                    )
 
                 if self.compute_fp32_loss:
                     chosen_reward = chosen_reward.float()
