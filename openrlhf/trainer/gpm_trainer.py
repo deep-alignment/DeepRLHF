@@ -181,20 +181,22 @@ class GeneralPreferenceModelTrainer(ABC):
                     )
 
                 if isinstance(self.loss_fn, (HighDimGeneralPreferenceRegressionMoELoss, HighDimGeneralPreferenceMoELoss)):
-                    batch_size = len(packed_seq_lens) // 2 if self.packing_samples else chosen_ids.shape[0]
-                    sequence_length = outputs["last_hidden_state"].size(1)
-                    hidden_states = outputs["last_hidden_state"][:batch_size, :, :]
-                    
-                    # Calculate prompt end indices
-                    prompt_end_index = sequence_length - chosen_response_len - 1
-                    prompt_end_index_expanded = prompt_end_index.unsqueeze(-1).expand(-1, 1, hidden_states.size(-1))
+                    if not self.packing_samples:
+                        chosen_last_hidden_states = outputs["last_hidden_state"][: chosen_ids.shape[0], :, :]
+                    else:
+                        # For packed samples, split the hidden states between chosen and rejected sequences
+                        batch_size = len(packed_seq_lens) // 2
+                        chosen_last_hidden_states = outputs["last_hidden_state"][:batch_size, :, :]
+
+                    prompt_end_index = chosen_last_hidden_states.size(1) - chosen_response_len - 1
+                    prompt_end_index_expanded = prompt_end_index.unsqueeze(-1).expand(-1, 1, chosen_last_hidden_states.size(-1))
                     prompt_end_index_expanded = prompt_end_index_expanded.long()
 
-                    # Handle potential batch dimension mismatch
-                    if hidden_states.size(0) == 1:
-                        hidden_states = hidden_states.expand(prompt_end_index_expanded.size(0), -1, -1)
+                    # Ensure batch dimensions match between tensors
+                    if chosen_last_hidden_states.size(0) == 1:
+                        chosen_last_hidden_states = chosen_last_hidden_states.expand(prompt_end_index_expanded.size(0), -1, -1)
                         
-                    prompt_hidden_state = torch.gather(hidden_states, 1, prompt_end_index_expanded).squeeze(1)
+                    prompt_hidden_state = torch.gather(chosen_last_hidden_states, 1, prompt_end_index_expanded).squeeze(1)
                     preference_loss, probs = self.loss_fn(chosen_reward, reject_reward, prompt_hidden_state, margin)
                 else:
                     preference_loss, probs = self.loss_fn(chosen_reward, reject_reward, margin)
