@@ -155,7 +155,7 @@ class GeneralPreferenceModelTrainer(ABC):
             loss_mean = 0
 
             for data in self.train_dataloader:
-                return_output = True if isinstance(self.loss_fn, HighDimGeneralPreferenceRegressionMoELoss) or isinstance(self.loss_fn, HighDimGeneralPreferenceMoELoss) else False
+                return_output = True if isinstance(self.loss_fn, (HighDimGeneralPreferenceRegressionMoELoss, HighDimGeneralPreferenceMoELoss)) else False
 
                 if not self.packing_samples:
                     chosen_ids, c_mask, reject_ids, r_mask, margin, chosen_response_len = data
@@ -174,10 +174,28 @@ class GeneralPreferenceModelTrainer(ABC):
                     packed_attention_masks = packed_attention_masks.to(torch.cuda.current_device())
                     chosen_response_len = torch.tensor(chosen_response_lens).view(-1, 1).to(torch.cuda.current_device())
 
-
                     chosen_reward, reject_reward, outputs = self.concatenated_forward(
                         self.model, packed_input_ids, packed_attention_masks, packed_seq_lens, None, return_output
                     )
+
+                if isinstance(self.loss_fn, (HighDimGeneralPreferenceRegressionMoELoss, HighDimGeneralPreferenceMoELoss)):
+                    batch_size = len(packed_seq_lens) // 2 if self.packing_samples else chosen_ids.shape[0]
+                    sequence_length = outputs["last_hidden_state"].size(1)
+                    hidden_states = outputs["last_hidden_state"][:batch_size, :, :]
+                    
+                    # Calculate prompt end indices
+                    prompt_end_index = sequence_length - chosen_response_len - 1
+                    prompt_end_index_expanded = prompt_end_index.unsqueeze(-1).expand(-1, 1, hidden_states.size(-1))
+                    prompt_end_index_expanded = prompt_end_index_expanded.long()
+
+                    # Handle potential batch dimension mismatch
+                    if hidden_states.size(0) == 1:
+                        hidden_states = hidden_states.expand(prompt_end_index_expanded.size(0), -1, -1)
+                        
+                    prompt_hidden_state = torch.gather(hidden_states, 1, prompt_end_index_expanded).squeeze(1)
+                    preference_loss, probs = self.loss_fn(chosen_reward, reject_reward, prompt_hidden_state.to(torch.cuda.current_device()), margin)
+                else:
+                    preference_loss, probs = self.loss_fn(chosen_reward, reject_reward, margin)
 
                 if self.margin_loss:
                     margin = torch.tensor(margin).to(torch.cuda.current_device())
