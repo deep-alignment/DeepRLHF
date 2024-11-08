@@ -163,6 +163,8 @@ class GeneralPreferenceModelTrainer(ABC):
                     r_mask = r_mask.squeeze(1).to(torch.cuda.current_device())
                     chosen_response_len = torch.tensor(chosen_response_len).view(-1, 1).to(torch.cuda.current_device())
 
+                    return_output = True if isinstance(self.loss_fn, HighDimGeneralPreferenceRegressionMoELoss) or isinstance(self.loss_fn, HighDimGeneralPreferenceMoELoss) else False
+
                     chosen_reward, reject_reward, outputs = self.concatenated_forward(
                         self.model, chosen_ids, c_mask, reject_ids, r_mask, return_output
                     )
@@ -172,6 +174,8 @@ class GeneralPreferenceModelTrainer(ABC):
                     packed_attention_masks = packed_attention_masks.to(torch.cuda.current_device())
                     chosen_response_len = torch.tensor(chosen_response_lens).view(-1, 1).to(torch.cuda.current_device())
 
+                    return_output = True if isinstance(self.loss_fn, HighDimGeneralPreferenceRegressionMoELoss) or isinstance(self.loss_fn, HighDimGeneralPreferenceMoELoss) else False
+
                     chosen_reward, reject_reward, outputs = self.concatenated_forward(
                         self.model, packed_input_ids, packed_attention_masks, packed_seq_lens, None, return_output
                     )
@@ -180,8 +184,6 @@ class GeneralPreferenceModelTrainer(ABC):
                     margin = torch.tensor(margin).to(torch.cuda.current_device())
                 else:
                     margin = None
-
-                return_output = True if isinstance(self.loss_fn, HighDimGeneralPreferenceRegressionMoELoss) or isinstance(self.loss_fn, HighDimGeneralPreferenceMoELoss) else False
                 
                 if isinstance(self.loss_fn, (HighDimGeneralPreferenceRegressionMoELoss, HighDimGeneralPreferenceMoELoss)):
                     # Get last hidden state for all samples
