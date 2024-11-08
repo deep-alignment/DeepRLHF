@@ -46,18 +46,18 @@ def train(args):
     )
 
     # prepare for data and dataset
-    train_data, eval_data = blending_datasets(  # Change this line to get both train and eval splits
+    train_data, eval_data = blending_datasets(
         args.dataset,
         args.dataset_probs,
         strategy,
         args.seed,
         max_count=args.max_samples,
         stopping_strategy="all_exhausted",
-        train_split=args.train_split,  # Add this line
-        eval_split=args.eval_split,    # Add this line
+        train_split=args.train_split,
+        eval_split=args.eval_split,
+        train_split_ratio=args.train_split_ratio,  # Add this parameter
     )
     
-    # Remove custom train/eval split logic that uses train_split_ratio
     train_data = train_data.select(range(min(args.max_samples, len(train_data))))
     eval_data = eval_data.select(range(min(args.max_samples, len(eval_data))))
 

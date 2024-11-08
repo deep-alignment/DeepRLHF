@@ -48,6 +48,7 @@ def blending_datasets(
     stopping_strategy="first_exhausted",
     train_split="train",
     eval_split="test",
+    train_split_ratio=1.0,  # Add this parameter
 ):
     datasets = datasets.split(",")
     probabilities = list(map(float, probabilities.split(",")))
@@ -97,7 +98,7 @@ def blending_datasets(
                 eval_data = data[eval_split].select(range(min(max_count, len(data[eval_split]))))
             # train will contains eval? TODO
             else:
-                eval_data = train_data.select(range(min(max_count, int(len(train_data) * 0.03))))
+                eval_data = train_data.select(range(min(max_count, int(len(train_data) * (1 - train_split_ratio)))))
             eval_data_list.append(eval_data)
 
     # merge datasets

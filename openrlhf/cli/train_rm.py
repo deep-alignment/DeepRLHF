@@ -53,6 +53,7 @@ def train(args):
         stopping_strategy="all_exhausted",
         train_split=args.train_split,
         eval_split=args.eval_split,
+        train_split_ratio=args.train_split_ratio,  # Pass the parameter here
     )
     train_data = train_data.select(range(min(args.max_samples, len(train_data))))
     eval_data = eval_data.select(range(min(args.max_samples, len(eval_data))))
@@ -219,6 +220,7 @@ if __name__ == "__main__":
     parser.add_argument("--eval_split", type=str, default="test", help="test split of the dataset")
     parser.add_argument("--max_samples", type=int, default=1e8, help="Max number of samples")
     parser.add_argument("--max_len", type=int, default=512)
+    parser.add_argument("--train_split_ratio", type=float, default=1.0, help="Ratio of dataset to use for training")
 
     # wandb parameters
     parser.add_argument("--use_wandb", type=str, default=None)
