@@ -248,30 +248,82 @@ class GeneralPreferenceModelTrainer(ABC):
 
                 if args.add_pretrain_loss:
                     if isinstance(self.ptx_loss_fn, DPORefFreeLoss):
-                        chosen_output = self.model.forward(chosen_ids, attention_mask=c_mask)
-                        chosen_label = torch.where(
-                            c_mask.bool(),
-                            chosen_ids,
-                            self.ptx_loss_fn.IGNORE_INDEX,
-                        ).to(torch.cuda.current_device())
-                        chosen_log_probs = chosen_output["logits"]
-                        rejected_output = self.model.forward(reject_ids, attention_mask=r_mask)
-                        rejected_label = torch.where(
-                            r_mask.bool(),
-                            reject_ids,
-                            self.ptx_loss_fn.IGNORE_INDEX,
-                        ).to(torch.cuda.current_device())
-                        rejected_log_probs = rejected_output["logits"] 
-                        chosen_reward_ptx_loss = self.ptx_loss_fn(chosen_log_probs, chosen_label, c_mask.bool(), rejected_log_probs, rejected_label, r_mask.bool())
+                        if not self.packing_samples:
+                            chosen_output = self.model.forward(chosen_ids, attention_mask=c_mask)
+                            chosen_label = torch.where(
+                                c_mask.bool(),
+                                chosen_ids,
+                                self.ptx_loss_fn.IGNORE_INDEX,
+                            ).to(torch.cuda.current_device())
+                            chosen_log_probs = chosen_output["logits"]
+                            rejected_output = self.model.forward(reject_ids, attention_mask=r_mask)
+                            rejected_label = torch.where(
+                                r_mask.bool(),
+                                reject_ids,
+                                self.ptx_loss_fn.IGNORE_INDEX,
+                            ).to(torch.cuda.current_device())
+                            rejected_log_probs = rejected_output["logits"]
+                            chosen_reward_ptx_loss = self.ptx_loss_fn(
+                                chosen_log_probs, chosen_label, c_mask.bool(),
+                                rejected_log_probs, rejected_label, r_mask.bool()
+                            )
+                        else:
+                            # Extract chosen sequences for DPO pretraining loss
+                            num_sequences = len(packed_seq_lens)
+                            num_chosen = num_sequences // 2
+                            chosen_seq_lens = packed_seq_lens[:num_chosen]
+                            chosen_total_len = sum(chosen_seq_lens)
+                            
+                            chosen_ids = packed_input_ids[:, :chosen_total_len]
+                            chosen_attn_mask = packed_attention_masks[:, :chosen_total_len]
+                            rejected_ids = packed_input_ids[:, chosen_total_len:]
+                            rejected_attn_mask = packed_attention_masks[:, chosen_total_len:]
+                            
+                            chosen_output = self.model.forward(chosen_ids, attention_mask=chosen_attn_mask)
+                            rejected_output = self.model.forward(rejected_ids, attention_mask=rejected_attn_mask)
+                            
+                            chosen_label = torch.where(
+                                chosen_attn_mask.bool(),
+                                chosen_ids,
+                                self.ptx_loss_fn.IGNORE_INDEX,
+                            ).to(torch.cuda.current_device())
+                            rejected_label = torch.where(
+                                rejected_attn_mask.bool(),
+                                rejected_ids,
+                                self.ptx_loss_fn.IGNORE_INDEX,
+                            ).to(torch.cuda.current_device())
+                            
+                            chosen_reward_ptx_loss = self.ptx_loss_fn(
+                                chosen_output["logits"], chosen_label, chosen_attn_mask.bool(),
+                                rejected_output["logits"], rejected_label, rejected_attn_mask.bool()
+                            )
                     else:
-                        ptx_output = self.model.forward(chosen_ids, attention_mask=c_mask)
-                        ptx_label = torch.where(
-                            c_mask.bool(),
-                            chosen_ids,
-                            self.ptx_loss_fn.IGNORE_INDEX,
-                        ).to(torch.cuda.current_device())
-                        ptx_log_probs = ptx_output["logits"]
-                        chosen_reward_ptx_loss = self.ptx_loss_fn(ptx_log_probs, ptx_label, c_mask.bool())
+                        if not self.packing_samples:
+                            ptx_output = self.model.forward(chosen_ids, attention_mask=c_mask)
+                            ptx_label = torch.where(
+                                c_mask.bool(),
+                                chosen_ids,
+                                self.ptx_loss_fn.IGNORE_INDEX,
+                            ).to(torch.cuda.current_device())
+                            ptx_log_probs = ptx_output["logits"]
+                            chosen_reward_ptx_loss = self.ptx_loss_fn(ptx_log_probs, ptx_label, c_mask.bool())
+                        else:
+                            # Extract chosen sequences for pretraining loss
+                            num_sequences = len(packed_seq_lens)
+                            num_chosen = num_sequences // 2
+                            chosen_seq_lens = packed_seq_lens[:num_chosen]
+                            chosen_total_len = sum(chosen_seq_lens)
+                            chosen_ids = packed_input_ids[:, :chosen_total_len]
+                            chosen_attn_mask = packed_attention_masks[:, :chosen_total_len]
+                            
+                            ptx_output = self.model.forward(chosen_ids, attention_mask=chosen_attn_mask)
+                            ptx_label = torch.where(
+                                chosen_attn_mask.bool(),
+                                chosen_ids,
+                                self.ptx_loss_fn.IGNORE_INDEX,
+                            ).to(torch.cuda.current_device())
+                            ptx_log_probs = ptx_output["logits"]
+                            chosen_reward_ptx_loss = self.ptx_loss_fn(ptx_log_probs, ptx_label, chosen_attn_mask.bool())
 
                     loss = (1 - args.ptx_loss_coef) * preference_loss + chosen_reward_ptx_loss * args.ptx_loss_coef
                 else:
