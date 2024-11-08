@@ -196,16 +196,21 @@ class GeneralPreferenceModelTrainer(ABC):
                     chosen_response_len = torch.tensor(chosen_response_lens).view(-1, 1).to(torch.cuda.current_device())
 
                     if args.add_pretrain_loss:
-                        # Get indices for chosen sequences based on attention mask index values
-                        chosen_mask = packed_attention_masks <= len(packed_seq_lens) // 2
-                        chosen_ids = packed_input_ids * chosen_mask
-                        chosen_attn_mask = packed_attention_masks * chosen_mask
-
-                        # Remove padding
-                        max_chosen_len = chosen_attn_mask.sum(dim=1).max()
-                        chosen_ids = chosen_ids[:, :max_chosen_len]
-                        chosen_attn_mask = chosen_attn_mask[:, :max_chosen_len]
-
+                        # Fix: Properly handle packed sequences for pretraining loss
+                        num_sequences = len(packed_seq_lens)
+                        num_chosen = num_sequences // 2
+                        
+                        # Get chosen sequences
+                        chosen_seq_lens = packed_seq_lens[:num_chosen]
+                        chosen_start = 0
+                        chosen_total_len = sum(chosen_seq_lens)
+                        
+                        chosen_ids = packed_input_ids[:, :chosen_total_len]
+                        chosen_attn_mask = packed_attention_masks[:, :chosen_total_len]
+                        
+                        # Fix: Create proper attention mask for packed sequences
+                        chosen_attn_mask = (chosen_attn_mask > 0).float()
+                        
                         ptx_output = self.model.forward(chosen_ids, attention_mask=chosen_attn_mask)
                         ptx_label = torch.where(
                             chosen_attn_mask.bool(),
@@ -419,13 +424,13 @@ class GeneralPreferenceModelTrainer(ABC):
             chosen_rewards = all_values[: chosen_ids.shape[0]]
             rejected_rewards = all_values[chosen_ids.shape[0] :]
         else:
-            # For packed samples, we need to use the actual sequence lengths to split rewards
+            # Fix: Properly handle attention masks for packed sequences
             all_values, outputs = model.custom_forward(
                 chosen_ids, 
-                attention_mask=c_mask,
+                attention_mask=(c_mask > 0).float(),  # Fix: Ensure proper attention mask format
                 return_output=return_output,
                 ring_attn_group=self.strategy.ring_attn_group,
-                packed_seq_lens=reject_ids  # Note: reject_ids parameter actually contains packed_seq_lens
+                packed_seq_lens=reject_ids
             )
             
             # Calculate number of chosen sequences (half of total sequences)
