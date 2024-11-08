@@ -206,6 +206,7 @@ def _get_general_preference_model(base_causal_model, base_llm_model, is_general_
                 # Pass through the linear layer to get the block diagonal entries (half of the matrix's off-diagonal blocks)
                 block_values = self.prompt_head(prompt_hidden_states).view(batch_size, dim // 2)
                 block_values = torch.softmax(block_values / math.sqrt(hidden_dim), dim=-1)
+                block_values = block_values * block_values.shape[-1]  # Scale to ensure sum of probabilities is equal to the dimension
                 # block_values = torch.sigmoid(block_values / math.sqrt(hidden_dim))
                 
                 # Create a batch of zero matrices [batch_size, dim, dim]
