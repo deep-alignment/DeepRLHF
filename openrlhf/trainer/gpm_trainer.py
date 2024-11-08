@@ -108,11 +108,11 @@ class GeneralPreferenceModelTrainer(ABC):
                 group=strategy.args.wandb_group,
                 name="GPM_" + \
                      ("norm" if strategy.args.is_preference_embedding_normalized else "") + \
-                     ("gating" if strategy.args.add_prompt_head else "") + \
-                     f"vdim{strategy.args.value_head_dim}_" + \
-                     ("ptx" if strategy.args.add_pretrain_loss else "") + \
+                     ("_gating" if strategy.args.add_prompt_head else "") + \
+                     f"_vdim{strategy.args.value_head_dim}_" + \
+                     ("_ptx" if strategy.args.add_pretrain_loss else "") + \
                      (f"{strategy.args.ptx_loss_coef}" if strategy.args.add_pretrain_loss else "") + \
-                     "M_" + str(strategy.args.pretrain) + "_D_" + \
+                     "_M_" + str(strategy.args.pretrain) + "_D_" + \
                      str(strategy.args.dataset) + "_mbs" + \
                      str(strategy.args.micro_train_batch_size) + "_" + \
                      str(strategy.args.max_epochs) + "epoch_jobid_" + \
