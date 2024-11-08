@@ -46,24 +46,20 @@ def train(args):
     )
 
     # prepare for data and dataset
-    total_data = blending_datasets(
+    train_data, eval_data = blending_datasets(  # Change this line to get both train and eval splits
         args.dataset,
         args.dataset_probs,
         strategy,
         args.seed,
-        max_count=5000000,
+        max_count=args.max_samples,
         stopping_strategy="all_exhausted",
-        return_eval=False
+        train_split=args.train_split,  # Add this line
+        eval_split=args.eval_split,    # Add this line
     )
-    total_data_length = min(args.max_samples, len(total_data))
-
-    if args.train_split_ratio < 1:
-        split_index = int(total_data_length * args.train_split_ratio)
-        train_data = total_data.select(range(split_index))
-        eval_data = total_data.select(range(split_index, total_data_length))
-    else:
-        train_data = total_data
-        eval_data = None
+    
+    # Remove custom train/eval split logic that uses train_split_ratio
+    train_data = train_data.select(range(min(args.max_samples, len(train_data))))
+    eval_data = eval_data.select(range(min(args.max_samples, len(eval_data))))
 
     train_dataset = GeneralRewardDataset(
         train_data,
@@ -83,27 +79,24 @@ def train(args):
         group_size=args.group_size,
     )
 
-    if eval_data is not None and len(eval_data) > 0:
-        eval_dataset = GeneralRewardDataset(
-            eval_data,
-            tokenizer,
-            args.max_len,
-            strategy,
-            is_custom=args.is_custom_dataset,
-            return_prompt_length=args.return_prompt_length,
-            multiple_of=args.ring_attn_size  # Add this parameter
-        )
-        eval_dataloader = strategy.setup_dataloader(
-            eval_dataset,
-            args.micro_train_batch_size,
-            True,
-            False,
-            eval_dataset.packing_collate_fn if args.packing_samples else eval_dataset.collate_fn  # Choose collate function based on packing_samples
-        )
-    else:
-        eval_dataloader = None
-        strategy.print("No separate validation data split was detected. The entire dataset will be utilized for training.")
-        
+    # Simplify eval dataset creation - always create it if eval_data exists
+    eval_dataset = GeneralRewardDataset(
+        eval_data,
+        tokenizer,
+        args.max_len,
+        strategy,
+        is_custom=args.is_custom_dataset,
+        return_prompt_length=args.return_prompt_length,
+        multiple_of=args.ring_attn_size  # Add this parameter
+    )
+    eval_dataloader = strategy.setup_dataloader(
+        eval_dataset,
+        args.micro_train_batch_size,  
+        True,
+        False,
+        eval_dataset.packing_collate_fn if args.packing_samples else eval_dataset.collate_fn
+    )
+
     # scheduler
     num_update_steps_per_epoch = len(train_dataset) // args.train_batch_size
     max_steps = math.ceil(args.max_epochs * num_update_steps_per_epoch)
@@ -216,6 +209,8 @@ if __name__ == "__main__":
     parser.add_argument("--add_pretrain_loss", action="store_true", default=False, help="Include the pretraining loss of chosen inputs in the total loss calculation.")
     parser.add_argument("--ptx_loss_coef", type=float, default=0.01, help="coefficient for pretraining loss included in the total loss.")
     parser.add_argument("--train_split_ratio", type=float, default=1, help="Ratio of the dataset to use for training. (1-train_split_ratio) for validation. Should not exceed 1.")
+    parser.add_argument("--train_split", type=str, default="train", help="train split of the HF dataset")
+    parser.add_argument("--eval_split", type=str, default="test", help="test split of the dataset")
     parser.add_argument("--reward_scaler_beta", type=float, default=2.0, help="A constant that controls the scaling of the reward difference.")
     parser.add_argument("--reward_margin", type=float, default=1.0, help="Chosen response exceeds rejected reward by at least reward_margin. A hyperparameter for DPORefFree Loss.")
     parser.add_argument("--regression_target_margin", type=float, default=10.0, help="Target regression margin. A hyperparameter for Regression Loss.")
