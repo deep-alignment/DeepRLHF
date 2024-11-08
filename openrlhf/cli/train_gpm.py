@@ -214,7 +214,7 @@ if __name__ == "__main__":
     parser.add_argument("--value_head_dim", type=int, default=2, help="Dimension of the value head in the general preference model. Ignored by the Bradley Terry model. Should be even.")
     parser.add_argument("--save_best_model", type=int, default=None, help="Save the top N models with the lowest evaluation loss.")
     parser.add_argument("--add_pretrain_loss", action="store_true", default=False, help="Include the pretraining loss of chosen inputs in the total loss calculation.")
-    parser.add_argument("--ptx_loss_coef", type=float, default=0.1, help="coefficient for pretraining loss included in the total loss.")
+    parser.add_argument("--ptx_loss_coef", type=float, default=0.01, help="coefficient for pretraining loss included in the total loss.")
     parser.add_argument("--train_split_ratio", type=float, default=1, help="Ratio of the dataset to use for training. (1-train_split_ratio) for validation. Should not exceed 1.")
     parser.add_argument("--reward_scaler_beta", type=float, default=2.0, help="A constant that controls the scaling of the reward difference.")
     parser.add_argument("--reward_margin", type=float, default=1.0, help="Chosen response exceeds rejected reward by at least reward_margin. A hyperparameter for DPORefFree Loss.")
