@@ -60,6 +60,10 @@ More details are in [Slides](https://docs.google.com/presentation/d/1JRhB1d7csof
 - Support for recovering from checkpoint (--load_checkpoint and --save_steps).
 - Multi-nodes [training scripts](./examples/scripts/train_llama_slurm.sh) for Slurm.
 
+## TODO
+
+- [ ] Fix GPM Eval bug
+
 ### PPO Support Matrix
 
 | Feature | OpenRLHF | DSChat | CAIChat | TRL |
