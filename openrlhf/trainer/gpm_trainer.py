@@ -247,9 +247,15 @@ class GeneralPreferenceModelTrainer(ABC):
                     prompt_end_index = chosen_last_hidden_states.size(1) - chosen_response_len - 1
                     prompt_end_index_expanded = prompt_end_index.unsqueeze(-1).expand(-1, -1, chosen_last_hidden_states.size(-1))
                     prompt_hidden_state = torch.gather(chosen_last_hidden_states, dim=1, index=prompt_end_index_expanded).squeeze(1)
-                    preference_loss, prob = self.loss_fn(chosen_reward, reject_reward, prompt_hidden_state.to(torch.cuda.current_device()), margin)
+                    preference_loss, probs = self.loss_fn(chosen_reward, reject_reward, prompt_hidden_state.to(torch.cuda.current_device()), margin)
                 else:
-                    preference_loss, prob = self.loss_fn(chosen_reward, reject_reward, margin)
+                    preference_loss, probs = self.loss_fn(chosen_reward, reject_reward, margin)
+
+                # Calculate accuracy from per-sample probabilities
+                acc = (probs > 0.5).float().mean().item()
+                acc_mean = acc_mean * 0.9 + 0.1 * acc
+                prob_mean = prob_mean * 0.9 + 0.1 * probs.mean().item()
+                loss_mean = loss_mean * 0.9 + 0.1 * preference_loss.item()
 
                 if args.add_pretrain_loss:
                     if isinstance(self.ptx_loss_fn, DPORefFreeLoss):
@@ -339,14 +345,6 @@ class GeneralPreferenceModelTrainer(ABC):
                 # Optimizer step
                 self.strategy.optimizer_step(self.optimizer, self.model, self.scheduler)
 
-                # Add accuracy calculation
-                with torch.no_grad():
-                    acc = (prob > 0.5).float().mean().item()
-                    acc_mean = acc_mean * 0.9 + 0.1 * acc
-                    prob = prob.mean().item()
-                    prob_mean = prob_mean * 0.9 + 0.1 * prob
-                    loss_mean = loss_mean * 0.9 + 0.1 * preference_loss.item()
-
                 # Update logs_dict to include the new metrics
                 logs_dict = {
                     "loss": preference_loss.item(),
@@ -354,7 +352,7 @@ class GeneralPreferenceModelTrainer(ABC):
                     "lr": self.scheduler.get_last_lr()[0],  # Add learning rate to logs
                     "acc": acc,
                     "acc_mean": acc_mean,
-                    "prob": prob,
+                    "probs": probs.mean().item(),
                     "prob_mean": prob_mean,
                 }
 
