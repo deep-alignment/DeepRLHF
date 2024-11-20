@@ -149,7 +149,7 @@ class GeneralPreferenceModelTrainer(ABC):
 
         epoch_bar = tqdm(range(start_epoch, self.epochs), desc="Train epoch", disable=not self.strategy.is_rank_0())
         for epoch in range(start_epoch, self.epochs):
-            if isinstance(self.train_dataloader.sampler, GroupDistributedSampler):
+            if isinstance(self.train_dataloader.sampler, DistributedSampler):
                 self.train_dataloader.sampler.set_epoch(
                     epoch, consumed_samples=0 if epoch > start_epoch else consumed_samples
                 )
