@@ -20,8 +20,7 @@ openrlhf.cli.train_gpm \
    --group_size 1 \
    --value_head_dim 64 \
    --is_general_preference \
-   --train_split_ratio 1.0 \
-   --save_best_model 2 \
+   --train_split_ratio 0.97 \
    --dataset Skywork/Skywork-Reward-Preference-80K-v0.2 \
    --apply_chat_template \
    --chosen_key chosen \

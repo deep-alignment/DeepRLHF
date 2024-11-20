@@ -15,6 +15,7 @@ openrlhf.cli.train_rm \
    --zero_stage 3 \
    --learning_rate 2e-6 \
    --l2 1e-3 \
+   --train_split_ratio 0.97 \
    --dataset Skywork/Skywork-Reward-Preference-80K-v0.2 \
    --apply_chat_template \
    --chosen_key chosen \
