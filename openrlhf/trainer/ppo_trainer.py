@@ -21,30 +21,39 @@ from .ppo_utils import AdaptiveKLController, Experience, FixedKLController, Naiv
 
 class PPOTrainer(ABC):
     """
-        Trainer for PPO algorithm.
+    Trainer for Proximal Policy Optimization (PPO) algorithm.
 
     Args:
-        strategy (Strategy): the strategy to use for training
-        actor (Actor): the actor model in ppo algorithm
-        critic (nn.Module): the critic model in ppo algorithm
-        reward_model (nn.Module): the reward model in rlhf algorithm to make reward of sentences
-        initial_model (Actor): the initial model in rlhf algorithm to generate reference logits to limit the update of actor
-        actor_optim (Optimizer): the optimizer to use for actor model
-        critic_optim (Optimizer): the optimizer to use for critic model
-        kl_coef (float, defaults to 0.1): the coefficient of kl divergence loss
-        train_batch_size (int, defaults to 8): the batch size to use for training
-        buffer_limit (int, defaults to 0): the max_size limitaiton of replay buffer
-        buffer_cpu_offload (bool, defaults to True): whether to offload replay buffer to cpu
-        eps_clip (float, defaults to 0.2): the clip coefficient of policy loss
-        value_clip (float, defaults to 0.4): the clip coefficient of value loss
-        experience_batch_size (int, defaults to 8): the batch size to use for experience generation
-        max_epochs (int, defaults to 1): the number of epochs of training process
-        tokenier (Callable, optional): the tokenizer to use for tokenizing the input
-        sample_replay_buffer (bool, defaults to False): whether to sample from replay buffer
-        dataloader_pin_memory (bool, defaults to True): whether to pin memory for data loader
-        callbacks (List[Callback], defaults to []): the callbacks to call during training process
-        generate_kwargs (dict, optional): the kwargs to use while model generating
-        remote_rm_url (str, optional): function for reward model api
+        strategy (Strategy): The training strategy to use.
+        actor (Actor): The actor model in the PPO algorithm.
+        critic (nn.Module): The critic model in the PPO algorithm.
+        reward_model (nn.Module): The reward model for calculating rewards in the RLHF setup.
+        initial_model (Actor): The initial model for reference logits to limit actor updates in RLHF.
+        ema_model (Actor): The exponential moving average model for stable training.
+        actor_optim (Optimizer): The optimizer for the actor model.
+        critic_optim (Optimizer): The optimizer for the critic model.
+        actor_scheduler (Scheduler): The learning rate scheduler for the actor.
+        critic_scheduler (Scheduler): The learning rate scheduler for the critic.
+        ema_beta (float, defaults to 0.992): EMA decay rate for model stability.
+        init_kl_coef (float, defaults to 0.001): Initial coefficient for KL divergence.
+        kl_target (float, optional): Target value for KL divergence.
+        kl_horizon (int, defaults to 10000): Horizon for KL annealing.
+        ptx_coef (float, defaults to 0): Coefficient for supervised loss from pre-trained data.
+        micro_train_batch_size (int, defaults to 8): Micro-batch size for actor training.
+        buffer_limit (int, defaults to 0): Maximum size of the replay buffer.
+        buffer_cpu_offload (bool, defaults to True): If True, offloads replay buffer to CPU.
+        eps_clip (float, defaults to 0.2): Clipping coefficient for policy loss.
+        value_clip (float, defaults to 0.2): Clipping coefficient for value function loss.
+        micro_rollout_batch_size (int, defaults to 8): Micro-batch size for generating rollouts.
+        gradient_checkpointing (bool, defaults to False): If True, enables gradient checkpointing.
+        max_epochs (int, defaults to 1): Number of epochs to train.
+        max_norm (float, defaults to 1.0): Maximum gradient norm for gradient clipping.
+        tokenizer (Callable, optional): Tokenizer for input data.
+        prompt_max_len (int, defaults to 128): Maximum length for prompts.
+        dataloader_pin_memory (bool, defaults to True): If True, pins memory in the data loader.
+        remote_rm_url (str, optional): URL for remote reward model API.
+        reward_fn (Callable, optional): Custom reward function for computing rewards.
+        **generate_kwargs: Additional arguments for model generation.
     """
 
     def __init__(
@@ -316,7 +325,8 @@ class PPOTrainer(ABC):
         status = {}
         if global_steps > self.freezing_actor_steps:
             status = self.training_step_actor(experience)
-        status.update(self.training_step_critic(experience))
+        if self.critic is not None:
+            status.update(self.training_step_critic(experience))
         return status
 
     def training_step_actor(self, experience: Experience) -> Dict[str, float]:
@@ -327,7 +337,7 @@ class PPOTrainer(ABC):
             sequences = torch.cat(experience.sequences, dim=0).unsqueeze(0)
             old_action_log_probs = torch.cat(experience.action_log_probs, dim=0).unsqueeze(0)
             advantages = torch.cat(experience.advantages, dim=0).unsqueeze(0)
-            num_actions = [v.numel() for v in experience.values]
+            num_actions = [v.numel() for v in experience.advantages]
             packed_seq_lens = [s.numel() for s in experience.sequences]
             attention_mask = torch.cat(
                 [torch.full_like(s, i + 1) for i, s in enumerate(experience.sequences)], dim=0
@@ -413,7 +423,7 @@ class PPOTrainer(ABC):
             sequences = torch.cat(experience.sequences, dim=0).unsqueeze(0)
             old_values = torch.cat(experience.values, dim=0).unsqueeze(0)
             returns = torch.cat(experience.returns, dim=0).unsqueeze(0)
-            num_actions = [v.numel() for v in experience.values]
+            num_actions = [v.numel() for v in experience.advantages]
             packed_seq_lens = [s.numel() for s in experience.sequences]
             attention_mask = torch.cat(
                 [torch.full_like(s, i + 1) for i, s in enumerate(experience.sequences)], dim=0
@@ -499,6 +509,7 @@ class PPOTrainer(ABC):
             args.max_ckpt_mem,
             client_states,
         )
-        self.strategy.save_ckpt(
-            self.critic, os.path.join(args.ckpt_path, "_critic"), tag, args.max_ckpt_num, args.max_ckpt_mem
-        )
+        if self.critic is not None:
+            self.strategy.save_ckpt(
+                self.critic, os.path.join(args.ckpt_path, "_critic"), tag, args.max_ckpt_num, args.max_ckpt_mem
+            )
