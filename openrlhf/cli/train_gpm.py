@@ -57,8 +57,11 @@ def train(args):
         train_split_ratio=args.train_split_ratio,
     )
 
+    train_data = train_data.select(range(min(args.max_samples, len(train_data))))
+    eval_data = eval_data.select(range(min(args.max_samples, len(eval_data))))
+
     train_dataset = GeneralRewardDataset(
-        train_data.select(range(min(args.max_samples, len(train_data)))),
+        train_data,
         tokenizer,
         args.max_len,
         strategy,
@@ -69,7 +72,7 @@ def train(args):
     )
 
     eval_dataset = GeneralRewardDataset(
-        eval_data.select(range(min(args.max_samples, len(eval_data)))),
+        eval_data,
         tokenizer,
         args.max_len,
         strategy,
@@ -85,17 +88,15 @@ def train(args):
         args.micro_train_batch_size,
         True,
         True,
-        train_dataset.packing_collate_fn if args.packing_samples else train_dataset.collate_fn,  # Choose collate function based on packing_samples
-        group_size=args.group_size,
+        train_dataset.packing_collate_fn if args.packing_samples else train_dataset.collate_fn,
     )
-
     eval_dataloader = strategy.setup_dataloader(
         eval_dataset,
         args.micro_train_batch_size,
         True,
         False,
         eval_dataset.packing_collate_fn if args.packing_samples else eval_dataset.collate_fn,
-    ) if eval_dataset is not None else None
+    )
 
     # scheduler
     num_update_steps_per_epoch = len(train_dataset) // args.train_batch_size
@@ -142,12 +143,6 @@ def train(args):
         tau=args.general_preference_tau,
         value_head_dim=args.value_head_dim,
     )
-
-    # Only assign eval_dataloader if it exists and has data
-    if eval_dataloader is not None and len(eval_dataset) > 0:
-        trainer.eval_dataloader = eval_dataloader
-    else:
-        strategy.print("Skipping evaluation due to empty eval_dataloader.")
 
     # Proceed with training
     trainer.fit(args, consumed_samples, num_update_steps_per_epoch)
