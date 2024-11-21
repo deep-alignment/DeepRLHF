@@ -332,102 +332,114 @@ class GeneralPreferenceModelTrainer(ABC):
             prob_sum = 0
             relative_score_sum = 0  # Add tracking for relative scores
 
-            for data in eval_dataloader:
+            for data in self.eval_dataloader:
+                # Process input data based on packing mode
                 if not self.packing_samples:
                     chosen_ids, c_mask, reject_ids, r_mask, margin, chosen_response_len = data
                     chosen_ids = chosen_ids.squeeze(1).to(torch.cuda.current_device())
                     c_mask = c_mask.squeeze(1).to(torch.cuda.current_device())
                     reject_ids = reject_ids.squeeze(1).to(torch.cuda.current_device())
                     r_mask = r_mask.squeeze(1).to(torch.cuda.current_device())
-                    margin = torch.tensor(margin, device=torch.cuda.current_device()) if margin else None
+                    margin = torch.tensor(margin).to(torch.cuda.current_device()) if margin else None
                     chosen_response_len = torch.tensor(chosen_response_len).view(-1, 1).to(torch.cuda.current_device())
                 else:
                     packed_input_ids, packed_attention_masks, packed_seq_lens, margin, chosen_response_lens = data
-                    packed_input_ids, packed_attention_masks = packed_input_ids.to(
-                        torch.cuda.current_device()
-                    ), packed_attention_masks.to(torch.cuda.current_device())
-                    margin = torch.tensor(margin, device=torch.cuda.current_device()) if margin else None
+                    packed_input_ids = packed_input_ids.to(torch.cuda.current_device())
+                    packed_attention_masks = packed_attention_masks.to(torch.cuda.current_device())
+                    margin = torch.tensor(margin).to(torch.cuda.current_device()) if margin else None
                     chosen_response_len = torch.tensor(chosen_response_lens).view(-1, 1).to(torch.cuda.current_device())
 
-            return_output = True if isinstance(self.loss_fn, (HighDimGeneralPreferenceRegressionMoELoss, HighDimGeneralPreferenceMoELoss)) else False
-            if not self.packing_samples:
-                chosen_reward, reject_reward, outputs = self.concatenated_forward(
-                    self.model, chosen_ids, c_mask, reject_ids, r_mask, return_output
-                )
-            else:
-                chosen_reward, reject_reward, outputs = self.concatenated_forward(
-                    self.model, packed_input_ids, packed_attention_masks, packed_seq_lens, None, return_output
-                )
+                # Forward pass
+                return_output = True if isinstance(self.loss_fn, (HighDimGeneralPreferenceRegressionMoELoss, HighDimGeneralPreferenceMoELoss)) else False
+                if not self.packing_samples:
+                    chosen_reward, reject_reward, outputs = self.concatenated_forward(
+                        self.model, chosen_ids, c_mask, reject_ids, r_mask, return_output
+                    )
+                else:
+                    chosen_reward, reject_reward, outputs = self.concatenated_forward(
+                        self.model, packed_input_ids, packed_attention_masks, packed_seq_lens, None, return_output
+                    )
             
-            if isinstance(self.loss_fn, (HighDimGeneralPreferenceRegressionMoELoss, HighDimGeneralPreferenceMoELoss)):
-                batch_size = len(packed_seq_lens) // 2 if self.packing_samples else chosen_ids.shape[0]
-                chosen_last_hidden_states = outputs["last_hidden_state"][:batch_size, :, :]
-                prompt_end_index = chosen_last_hidden_states.size(1) - chosen_response_len - 1
-                prompt_end_index_expanded = prompt_end_index.unsqueeze(-1).expand(-1, 1, chosen_last_hidden_states.size(-1))
-                prompt_end_index_expanded = prompt_end_index_expanded.long()
+                # Extract prompt hidden states for MoE models if needed
+                prompt_hidden_state = None
+                if isinstance(self.loss_fn, (HighDimGeneralPreferenceRegressionMoELoss, HighDimGeneralPreferenceMoELoss)):
+                    batch_size = len(packed_seq_lens) // 2 if self.packing_samples else chosen_ids.shape[0]
+                    chosen_last_hidden_states = outputs["last_hidden_state"][:batch_size, :, :]
+                    prompt_end_index = chosen_last_hidden_states.size(1) - chosen_response_len - 1
+                    prompt_end_index_expanded = prompt_end_index.unsqueeze(-1).expand(-1, 1, chosen_last_hidden_states.size(-1))
+                    prompt_end_index_expanded = prompt_end_index_expanded.long()
 
-                if chosen_last_hidden_states.size(0) == 1:
-                    chosen_last_hidden_states = chosen_last_hidden_states.expand(prompt_end_index_expanded.size(0), -1, -1)
-                prompt_hidden_state = torch.gather(chosen_last_hidden_states, 1, prompt_end_index_expanded).squeeze(1)
-                preference_loss, relative_score = self.loss_fn(chosen_reward, reject_reward, prompt_hidden_state, margin)
-            else:
-                preference_loss, relative_score = self.loss_fn(chosen_reward, reject_reward, margin)
-                
-            probs = torch.sigmoid(relative_score)
-            
-            loss = preference_loss
+                    if chosen_last_hidden_states.size(0) == 1:
+                        chosen_last_hidden_states = chosen_last_hidden_states.expand(prompt_end_index_expanded.size(0), -1, -1)
+                    prompt_hidden_state = torch.gather(chosen_last_hidden_states, 1, prompt_end_index_expanded).squeeze(1)
 
-            # Collect statistics
-            rewards += [chosen_reward.flatten(), reject_reward.flatten()]
-            acc += (probs > 0.5).float().mean().item()
-            loss_sum += loss.item()
-            prob_sum += probs.mean().item()
-            relative_score_sum += relative_score.mean().item()  # Calculate relative score
+                # Compute loss and probabilities
+                if self.compute_fp32_loss:
+                    chosen_reward = chosen_reward.float()
+                    reject_reward = reject_reward.float()
+                    
+                if isinstance(self.loss_fn, (HighDimGeneralPreferenceRegressionMoELoss, HighDimGeneralPreferenceMoELoss)):
+                    preference_loss, relative_score = self.loss_fn(chosen_reward, reject_reward, prompt_hidden_state.to(torch.cuda.current_device()), margin)
+                else:
+                    preference_loss, relative_score = self.loss_fn(chosen_reward, reject_reward, margin)
 
-            step_bar.update()
+                # Calculate probabilities from relative scores
+                probs = torch.sigmoid(relative_score)
 
-        acc_mean = acc / eval_dataloader.__len__()
-        loss_mean = loss_sum / eval_dataloader.__len__() 
-        prob_mean = prob_sum / eval_dataloader.__len__()
-        relative_score_mean = relative_score_sum / eval_dataloader.__len__()  # Calculate mean relative score
+                # Collect statistics
+                rewards += [chosen_reward.flatten(), reject_reward.flatten()]
+                acc += (probs > 0.5).float().mean().item()
+                loss_sum += preference_loss.item()
+                prob_sum += probs.mean().item()
+                relative_score_sum += relative_score.mean().item()  # Calculate relative score
 
-        # Calculate reward statistics
-        rewards = torch.cat(rewards).float()
-        rewards = self.strategy.all_gather(rewards)
-        reward_mean = torch.mean(rewards)
-        reward_std = torch.std(rewards).clamp(min=1e-8)
+                step_bar.update()
 
-        # Update model config with reward statistics
-        self.strategy.print("Set reward mean std")
-        unwrap_model = self.strategy._unwrap_model(self.model)
-        unwrap_model.config.mean = reward_mean.item()
-        unwrap_model.config.std = reward_std.item()
+            acc_mean = acc / eval_dataloader.__len__()
+            loss_mean = loss_sum / eval_dataloader.__len__() 
+            prob_mean = prob_sum / eval_dataloader.__len__()
+            relative_score_mean = relative_score_sum / eval_dataloader.__len__()  # Calculate mean relative score
 
-        bar_dict = {
-            "eval_loss": loss_mean,
-            "acc_mean": acc_mean,
-            "prob_mean": prob_mean,
-            "reward_mean": reward_mean.item(),
-            "reward_std": reward_std.item(),
-            "relative_score_mean": relative_score_mean,
-        }
-        logs = self.strategy.all_reduce(bar_dict)
-        step_bar.set_postfix(logs)
+            # Calculate reward statistics
+            rewards = torch.cat(rewards).float()
+            rewards = self.strategy.all_gather(rewards)
+            reward_mean = torch.mean(rewards)
+            reward_std = torch.std(rewards).clamp(min=1e-8)
 
-        # Print reward distribution histogram
-        histgram = torch.histogram(rewards.cpu(), bins=10, range=(-10, 10), density=True) * 2
-        self.strategy.print("histgram")
-        self.strategy.print(histgram)
+            # Update model config with reward statistics
+            self.strategy.print("Set reward mean std")
+            unwrap_model = self.strategy._unwrap_model(self.model)
+            unwrap_model.config.mean = reward_mean.item()
+            unwrap_model.config.std = reward_std.item()
 
-        if self.strategy.is_rank_0():
-            if self._wandb is not None:
-                logs = {"eval/%s" % k: v for k, v in {**logs, "global_step": steps}.items()}
-                self._wandb.log(logs)
+            bar_dict = {
+                "eval_loss": loss_mean,
+                "acc_mean": acc_mean,
+                "prob_mean": prob_mean,
+                "reward_mean": reward_mean.item(),
+                "reward_std": reward_std.item(),
+                "relative_score_mean": relative_score_mean,
+            }
+            logs = self.strategy.all_reduce(bar_dict)
+            step_bar.set_postfix(logs)
+
+            # Print reward distribution histogram
+            histgram = torch.histogram(rewards.cpu(), bins=10, range=(-10, 10), density=True) * 2
+            self.strategy.print("histgram")
+            self.strategy.print(histgram)
+
+            if self.strategy.is_rank_0():
+                if self._wandb is not None:
+                    logs = {"eval/%s" % k: v for k, v in {**logs, "global_step": steps}.items()}
+                    self._wandb.log(logs)
+                elif self._tensorboard is not None:
+                    for k, v in logs.items():
+                        self._tensorboard.add_scalar(f"eval/{k}", v, steps)
 
         self.model.train()  # reset model state
-        torch.cuda.empty_cache()
-        if self.strategy.is_rank_0():
-            return loss_mean
+        # torch.cuda.empty_cache()
+        # if self.strategy.is_rank_0():
+            # return loss_mean
 
     def concatenated_forward(self, model, chosen_ids, c_mask, reject_ids, r_mask, return_output: bool = False):
         """Run the given model on concatenated inputs or packed samples"""
