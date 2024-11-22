@@ -20,6 +20,9 @@ openrlhf.cli.train_gpm \
    --group_size 1 \
    --value_head_dim 64 \
    --is_general_preference \
+   --is_preference_embedding_normalized \
+   --add_pretrain_loss \
+   --ptx_loss_coef 0.01 \
    --train_split_ratio 0.97 \
    --dataset Skywork/Skywork-Reward-Preference-80K-v0.2 \
    --apply_chat_template \
