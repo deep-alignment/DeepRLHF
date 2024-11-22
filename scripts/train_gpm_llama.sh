@@ -21,6 +21,7 @@ openrlhf.cli.train_gpm \
    --value_head_dim 64 \
    --is_general_preference \
    --is_preference_embedding_normalized \
+   --is_using_nonlinear_value_head \
    --add_pretrain_loss \
    --ptx_loss_coef 0.01 \
    --train_split_ratio 0.97 \
@@ -43,6 +44,8 @@ EOF
      # --add_prompt_head \
      # --add_pretrain_loss \
      # --ptx_loss_coef 0.00 \
+     # --is_using_nonlinear_value_head \
+     # --is_using_nonlinear_prompt_gate \
 
 if [[ ${1} != "slurm" ]]; then
     deepspeed --module $training_commands

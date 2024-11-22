@@ -31,6 +31,8 @@ def train(args):
         init_prompt_head=True,
         add_prompt_head=args.add_prompt_head,
         is_preference_embedding_normalized=args.is_preference_embedding_normalized,
+        is_using_nonlinear_value_head=args.is_using_nonlinear_value_head,
+        is_using_nonlinear_prompt_gate=args.is_using_nonlinear_prompt_gate,
     )
 
     # configure tokenizer
@@ -246,6 +248,12 @@ if __name__ == "__main__":
     parser.add_argument("--packing_samples", action="store_true", default=False, help="Enable sample packing using Flash Attention2")
     parser.add_argument("--ring_attn_size", type=int, default=1, help="Ring attention group size")
     parser.add_argument("--ring_head_stride", type=int, default=1, help="Ring attention head stride")
+
+    # Add the new arguments
+    parser.add_argument("--is_using_nonlinear_value_head", action="store_true", default=False, 
+                       help="Whether to use nonlinear MLP for the value head instead of linear layer")
+    parser.add_argument("--is_using_nonlinear_prompt_gate", action="store_true", default=False,
+                       help="Whether to use nonlinear MLP for the prompt gate instead of linear layer")
 
     args = parser.parse_args()
 

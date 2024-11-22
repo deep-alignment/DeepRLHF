@@ -169,16 +169,17 @@ def _get_general_preference_model(base_causal_model, base_llm_model, is_general_
             setattr(self, self.base_model_prefix, base_llm_model(config))
             if not is_general_preference:
                 self.value_head = nn.Linear(config.hidden_size, 1, bias=False)
-            else: 
+            else:
                 if is_using_nonlinear_value_head:
                     self.value_head = ValueMLP(config.hidden_size, value_head_dim)
                 else:
-                    self.value_head = nn.Linear(config.hidden_size, value_head_dim, bias=False) 
+                    self.value_head = nn.Linear(config.hidden_size, value_head_dim, bias=False)
+                
                 if add_prompt_head:
-                    if is_using_nonlinear_prompt_gate:
+                    if is_using_nonlinear_prompt_gate:  
                         self.prompt_head = PromptMLP(config.hidden_size, value_head_dim // 2)
                     else:
-                        self.prompt_head = nn.Linear(config.hidden_size, value_head_dim // 2, bias=False) 
+                        self.prompt_head = nn.Linear(config.hidden_size, value_head_dim // 2, bias=False)
         
             self.is_general_preference = is_general_preference    
             self.is_preference_embedding_normalized = is_preference_embedding_normalized  # Renamed attribute

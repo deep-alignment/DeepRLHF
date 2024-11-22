@@ -43,6 +43,8 @@ EOF
      # --add_prompt_head \
      # --add_pretrain_loss \
      # --ptx_loss_coef 0.00 \
+     # --is_using_nonlinear_value_head \
+     # --is_using_nonlinear_prompt_gate \
 
 if [[ ${1} != "slurm" ]]; then
     deepspeed --module $training_commands
