@@ -111,11 +111,27 @@ def get_general_preference_model(
     if init_value_head:
         if dschf is not None:
             logger.info("Initialize value_head for ZeRO-3 reward model training.")
-            with deepspeed.zero.GatheredParameters([model.value_head.weight], modifier_rank=0):
-                if torch.distributed.get_rank() == 0:
-                    model.value_head.weight.data.normal_(mean=0.0, std=1 / (config.hidden_size + 1))
+            if is_using_nonlinear_value_head:
+                # Initialize each layer in ValueMLP
+                for name, param in model.value_head.named_parameters():
+                    with deepspeed.zero.GatheredParameters([param], modifier_rank=0):
+                        if torch.distributed.get_rank() == 0:
+                            if 'weight' in name:
+                                # For linear layers
+                                param.data.normal_(mean=0.0, std=1 / math.sqrt(param.size(1)))
+            else:
+                with deepspeed.zero.GatheredParameters([model.value_head.weight], modifier_rank=0):
+                    if torch.distributed.get_rank() == 0:
+                        model.value_head.weight.data.normal_(mean=0.0, std=1 / (config.hidden_size + 1))
         else:
-            model.value_head.weight.data.normal_(mean=0.0, std=1 / (config.hidden_size + 1))
+            if is_using_nonlinear_value_head:
+                # Initialize each layer in ValueMLP
+                for name, param in model.value_head.named_parameters():
+                    if 'weight' in name:
+                        # For linear layers
+                        param.data.normal_(mean=0.0, std=1 / math.sqrt(param.size(1)))
+            else:
+                model.value_head.weight.data.normal_(mean=0.0, std=1 / (config.hidden_size + 1))
             
     if init_prompt_head and add_prompt_head:
         if dschf is not None:
