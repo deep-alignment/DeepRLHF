@@ -35,7 +35,7 @@ def get_general_preference_model(
     is_general_preference: bool = False,
     value_head_dim: int = 2,
     is_preference_embedding_normalized: bool = False,  # Renamed argument
-    is_using_nonlinear_gate: bool = False,  # Added parameter
+    is_using_nonlinear_value_head: bool = False,  # Added parameter
     is_using_nonlinear_prompt_gate: bool = False,  # Added new parameter
     **kwargs,
 ) -> nn.Module:
@@ -58,7 +58,7 @@ def get_general_preference_model(
     config._attn_implementation = "flash_attention_2" if use_flash_attention_2 else "eager"
     base_class = AutoModel._model_mapping[type(config)]
     base_causal_class = AutoModelForCausalLM._model_mapping.get(type(config), None)
-    cls_class = _get_general_preference_model(base_causal_class, base_class, is_general_preference, add_prompt_head, value_head_dim, is_preference_embedding_normalized=is_preference_embedding_normalized, is_using_nonlinear_gate=is_using_nonlinear_gate, is_using_nonlinear_prompt_gate=is_using_nonlinear_prompt_gate)  # Updated argument name
+    cls_class = _get_general_preference_model(base_causal_class, base_class, is_general_preference, add_prompt_head, value_head_dim, is_preference_embedding_normalized=is_preference_embedding_normalized, is_using_nonlinear_value_head=is_using_nonlinear_value_head, is_using_nonlinear_prompt_gate=is_using_nonlinear_prompt_gate)  # Updated argument name
     # Note: dschf is defined in function scope to avoid global effects
     # https://huggingface.co/docs/transformers/main_classes/deepspeed#nontrainer-deepspeed-integration
     
