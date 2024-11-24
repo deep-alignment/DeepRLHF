@@ -112,6 +112,9 @@ def get_args():
     parser.add_argument("--bf16", action="store_true", default=False)
     parser.add_argument("--model_name", type=str, default="model", help="Model name. Default to be 'model'")
     parser.add_argument("--add_prompt_head", action="store_true", default=False, help="Add a prompt head to the model if set. Default to False.")
+    parser.add_argument("--is_preference_embedding_normalized", action="store_true", default=False, help="Whether to normalize preference embeddings. Default to False")
+    parser.add_argument("--is_using_nonlinear_value_head", action="store_true", default=False, help="Use nonlinear MLP for value head. Default to False") 
+    parser.add_argument("--is_using_nonlinear_prompt_gate", action="store_true", default=False, help="Use nonlinear MLP for prompt gate. Default to False")
     args = parser.parse_args()
     args.torch_dtype = torch_dtype_mapping(args.torch_dtype)
 
@@ -332,6 +335,9 @@ def main():
                 is_general_preference=args.is_general_preference,
                 value_head_dim=args.value_head_dim,
                 add_prompt_head=args.add_prompt_head,
+                is_preference_embedding_normalized=args.is_preference_embedding_normalized,
+                is_using_nonlinear_value_head=args.is_using_nonlinear_value_head,
+                is_using_nonlinear_prompt_gate=args.is_using_nonlinear_prompt_gate
             )
             device = torch.device("cuda:0")
             model.to(device)
