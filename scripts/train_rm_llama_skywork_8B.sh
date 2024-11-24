@@ -10,7 +10,7 @@ openrlhf.cli.train_rm \
    --micro_train_batch_size 8 \
    --pretrain  Skywork/Skywork-Reward-Llama-3.1-8B-v0.2 \
    --bf16 \
-   --max_epochs 2 \
+   --max_epochs 1 \
    --max_len 4096 \
    --zero_stage 3 \
    --learning_rate 2e-6 \
