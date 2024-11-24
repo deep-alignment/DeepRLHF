@@ -136,11 +136,27 @@ def get_general_preference_model(
     if init_prompt_head and add_prompt_head:
         if dschf is not None:
             logger.info("Initialize prompt_head for ZeRO-3 reward model training.")
-            with deepspeed.zero.GatheredParameters([model.prompt_head.weight], modifier_rank=0):
-                if torch.distributed.get_rank() == 0:
-                    model.prompt_head.weight.data.normal_(mean=0.0, std=1 / (config.hidden_size + 1))
+            if is_using_nonlinear_prompt_gate:
+                # Initialize each layer in PromptMLP
+                for name, param in model.prompt_head.named_parameters():
+                    with deepspeed.zero.GatheredParameters([param], modifier_rank=0):
+                        if torch.distributed.get_rank() == 0:
+                            if 'weight' in name:
+                                # For linear layers
+                                param.data.normal_(mean=0.0, std=1 / math.sqrt(param.size(1)))
+            else:
+                with deepspeed.zero.GatheredParameters([model.prompt_head.weight], modifier_rank=0):
+                    if torch.distributed.get_rank() == 0:
+                        model.prompt_head.weight.data.normal_(mean=0.0, std=1 / (config.hidden_size + 1))
         else:
-            model.prompt_head.weight.data.normal_(mean=0.0, std=1 / (config.hidden_size + 1))
+            if is_using_nonlinear_prompt_gate:
+                # Initialize each layer in PromptMLP
+                for name, param in model.prompt_head.named_parameters():
+                    if 'weight' in name:
+                        # For linear layers
+                        param.data.normal_(mean=0.0, std=1 / math.sqrt(param.size(1)))
+            else:
+                model.prompt_head.weight.data.normal_(mean=0.0, std=1 / (config.hidden_size + 1))
         
     return model
 

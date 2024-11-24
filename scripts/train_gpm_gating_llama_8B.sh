@@ -2,13 +2,13 @@ set -x
 
 read -r -d '' training_commands <<EOF
 openrlhf.cli.train_gpm \
-   --save_path ./checkpoint/Llama-3.2-3B-Instruct-GPM \
+   --save_path ./checkpoint/Llama-3.1-8B-Instruct-GPM \
    --save_steps -1 \
    --logging_steps 1 \
    --eval_steps -1 \
-   --train_batch_size 128 \
-   --micro_train_batch_size 8 \
-   --pretrain meta-llama/Llama-3.2-3B-Instruct \
+   --train_batch_size 32 \
+   --micro_train_batch_size 4 \
+   --pretrain meta-llama/Llama-3.1-8B-Instruct \
    --bf16 \
    --max_epochs 2 \
    --max_len 8192 \
@@ -24,6 +24,7 @@ openrlhf.cli.train_gpm \
    --return_prompt_length \
    --add_prompt_head \
    --is_using_nonlinear_value_head \
+   --is_using_nonlinear_prompt_gate \
    --train_split_ratio 0.97 \
    --dataset Skywork/Skywork-Reward-Preference-80K-v0.2 \
    --apply_chat_template \
