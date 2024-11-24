@@ -2,7 +2,7 @@ set -x
 
 read -r -d '' training_commands <<EOF
 openrlhf.cli.train_gpm \
-   --save_path ./checkpoint/Llama-3.1-8B-Instruct-GPM \
+   --save_path ./checkpoint/Llama-3.1-8B-Instruct-GPM-dim2 \
    --save_steps -1 \
    --logging_steps 1 \
    --eval_steps -1 \
@@ -18,7 +18,7 @@ openrlhf.cli.train_gpm \
    --general_preference_tau 0.1 \
    --dataset_probs 1 \
    --group_size 1 \
-   --value_head_dim 64 \
+   --value_head_dim 2 \
    --is_general_preference \
    --is_preference_embedding_normalized \
    --return_prompt_length \
