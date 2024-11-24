@@ -2,7 +2,7 @@ set -x
 
 read -r -d '' training_commands <<EOF
 openrlhf.cli.train_rm \
-   --save_path ./checkpoint/Skywork-Reward-Llama-3.1-8B-v0.2-RM-1epoch \
+   --save_path ./checkpoint/Skywork-Reward-Llama-3.1-8B-v0.2-RM \
    --save_steps -1 \
    --logging_steps 1 \
    --eval_steps -1 \
