@@ -6,8 +6,8 @@ openrlhf.cli.train_gpm \
    --save_steps -1 \
    --logging_steps 1 \
    --eval_steps -1 \
-   --train_batch_size 32 \
-   --micro_train_batch_size 4 \
+   --train_batch_size 128 \
+   --micro_train_batch_size 8 \
    --pretrain meta-llama/Llama-3.1-8B-Instruct \
    --bf16 \
    --max_epochs 2 \
