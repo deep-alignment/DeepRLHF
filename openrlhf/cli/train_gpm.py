@@ -92,13 +92,17 @@ def train(args):
         True,
         train_dataset.packing_collate_fn if args.packing_samples else train_dataset.collate_fn,
     )
-    eval_dataloader = strategy.setup_dataloader(
-        eval_dataset,
-        args.micro_train_batch_size,
-        True,
-        False,
-        eval_dataset.packing_collate_fn if args.packing_samples else eval_dataset.collate_fn,
-    )
+
+    # Handle empty eval dataset case
+    eval_dataloader = None
+    if eval_dataset is not None:
+        eval_dataloader = strategy.setup_dataloader(
+            eval_dataset,
+            args.micro_train_batch_size,
+            True,
+            False,
+            eval_dataset.packing_collate_fn if args.packing_samples else eval_dataset.collate_fn,
+        )
 
     # scheduler
     num_update_steps_per_epoch = len(train_dataset) // args.train_batch_size

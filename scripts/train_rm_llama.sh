@@ -11,7 +11,7 @@ openrlhf.cli.train_rm \
    --pretrain meta-llama/Llama-3.2-3B-Instruct \
    --bf16 \
    --max_epochs 2 \
-   --max_len 8192 \
+   --max_len 4096 \
    --zero_stage 3 \
    --learning_rate 2e-6 \
    --l2 1e-3 \
