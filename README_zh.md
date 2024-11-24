@@ -350,15 +350,17 @@ ray job submit --address="http://127.0.0.1:8265" \
 
 ## 使用 OpenRLHF 的公司和组织
 
+- Google
 - ByteDance
-- NexusFlow
-- Baidu
-- Jülich Supercomputing Centre (JSC)
-- Berkeley Starling Team
 - Tencent
 - Alibaba
-- Google
+- Baidu
 - China Telecom
+- Allen AI
+- NexusFlow
+- Jülich Supercomputing Centre (JSC)
+- Berkeley Starling Team
+- M-A-P
 - ...
 
 
@@ -414,7 +416,7 @@ ray job submit --address="http://127.0.0.1:8265" \
 ```
 @article{hu2024openrlhf,
   title={OpenRLHF: An Easy-to-use, Scalable and High-performance RLHF Framework},
-  author={Jian Hu and Xibin Wu and Weixun Wang and Xianyu and Dehao Zhang and Yu Cao},
+  author={Jian Hu and Xibin Wu and Zilin Zhu and Xianyu and Weixun Wang and Dehao Zhang and Yu Cao},
   journal={arXiv preprint arXiv:2405.11143},
   year={2024}
 }
