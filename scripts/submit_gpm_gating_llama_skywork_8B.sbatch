@@ -34,7 +34,7 @@ export CUDA_VISIBLE_DEVICES=0,1,2,3
 echo "Job id: $SLURM_JOB_ID"
 source ./sc_venv_template_hydra/activate.sh 
 
-readonly training_script="scripts/train_gpm_gating_llama_8B.sh" 
+readonly training_script="scripts/train_gpm_gating_llama_skywork_8B.sh" 
 source ./${training_script} slurm
 
 torchrun \
