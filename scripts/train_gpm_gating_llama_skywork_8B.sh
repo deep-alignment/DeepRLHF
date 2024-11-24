@@ -2,7 +2,7 @@ set -x
 
 read -r -d '' training_commands <<EOF
 openrlhf.cli.train_gpm \
-   --save_path ./checkpoint/Skywork-Reward-Llama-3.1-8B-v0.2-GPM-dim2 \
+   --save_path ./checkpoint/Skywork-Reward-Llama-3.1-8B-v0.2-GPM-dim4-epoch2 \
    --save_steps -1 \
    --logging_steps 1 \
    --eval_steps -1 \
@@ -10,7 +10,7 @@ openrlhf.cli.train_gpm \
    --micro_train_batch_size 8 \
    --pretrain Skywork/Skywork-Reward-Llama-3.1-8B-v0.2 \
    --bf16 \
-   --max_epochs 1 \
+   --max_epochs 2 \
    --max_len 4096 \
    --zero_stage 3 \
    --learning_rate 2e-6 \
@@ -18,7 +18,7 @@ openrlhf.cli.train_gpm \
    --general_preference_tau 0.1 \
    --dataset_probs 1 \
    --group_size 1 \
-   --value_head_dim 2 \
+   --value_head_dim 4 \
    --is_general_preference \
    --is_preference_embedding_normalized \
    --return_prompt_length \

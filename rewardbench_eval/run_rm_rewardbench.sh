@@ -6,8 +6,9 @@ python run_rm_rewardbench.py \
 --chat_template raw \
 --is_custom_model \
 --do_not_save \
+--enable_beaker_save \
 --model_name "${MODEL_NAME}" \
---batch_size 16 \
+--batch_size 32 \
 --value_head_dim 2 \
 --max_length 4096 \
 --is_general_preference \
@@ -19,4 +20,6 @@ python run_rm_rewardbench.py \
 # Optional flags:
 # --bf16 \
 # --flash_attn \
-# --model '../checkpoint/Skywork-Reward-Llama-3.1-8B-v0.2-GPM-dim2' \
+# MODEL_NAME="Skywork-Reward-Llama-3.1-8B-v0.2-GPM-dim2"
+# MODEL_NAME="Llama-3.1-8B-Instruct-GPM-dim2"
+

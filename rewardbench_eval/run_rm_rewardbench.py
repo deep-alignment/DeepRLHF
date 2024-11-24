@@ -92,7 +92,7 @@ def get_args():
         "--debug", action="store_true", help="run on common preference sets instead of our custom eval set"
     )
     parser.add_argument(
-        "--disable_beaker_save", action="store_true", help="disable saving the main results in a file for AI2 Beaker"
+        "--enable_beaker_save", action="store_true", help="disable saving the main results in a file for AI2 Beaker"
     )
     parser.add_argument(
         "--not_quantized", action="store_true", help="disable quantization for models that are quantized by default"
@@ -482,7 +482,7 @@ def main():
         sub_path,
         args.debug,
         local_only=args.do_not_save,
-        save_metrics_for_beaker=not args.disable_beaker_save,
+        save_metrics_for_beaker=args.enable_beaker_save,
     )
     if not args.do_not_save:
         logger.info(f"Uploaded reward model results to {results_url}")
