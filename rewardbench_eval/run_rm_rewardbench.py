@@ -31,7 +31,7 @@ from accelerate.logging import get_logger
 from fastchat.conversation import get_conv_template
 from tqdm import tqdm
 from transformers import AutoTokenizer, pipeline, AutoModel
-from general_preference.models import get_reward_model
+from openrlhf.models import get_general_preference_model
 from rewardbench_utils import CustomLeftPadRewardBenchPipeline, generate_high_dim_result, generate_high_dim_result_with_prompt
 
 from rewardbench import (
@@ -325,7 +325,7 @@ def main():
             reward_pipe.model = model
         else:
             dataloader, _ = accelerator.prepare(dataloader, reward_pipe.model)
-            model = get_reward_model(
+            model = get_general_preference_model(
                 args.model,
                 use_flash_attention_2=args.flash_attn,
                 bf16=args.bf16,
