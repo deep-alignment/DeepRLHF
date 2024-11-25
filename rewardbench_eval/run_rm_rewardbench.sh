@@ -1,4 +1,4 @@
-MODEL_NAME="Llama-3.1-8B-Instruct-GPM-dim2"
+MODEL_NAME="Llama-3.1-8B-Instruct-GPM-dim8"
 export CUDA_VISIBLE_DEVICES=0
 python run_rm_rewardbench.py \
 --model "../checkpoint/${MODEL_NAME}" \
@@ -9,7 +9,7 @@ python run_rm_rewardbench.py \
 --enable_beaker_save \
 --model_name "${MODEL_NAME}" \
 --batch_size 32 \
---value_head_dim 2 \
+--value_head_dim 8 \
 --max_length 4096 \
 --is_general_preference \
 --is_preference_embedding_normalized \

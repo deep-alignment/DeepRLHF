@@ -2,13 +2,13 @@ set -x
 
 read -r -d '' training_commands <<EOF
 openrlhf.cli.train_gpm \
-   --save_path ./checkpoint/Llama-3.1-8B-Instruct-GPM-dim8 \
+   --save_path ./checkpoint/google/gemma-2b-it-GPM-dim6 \
    --save_steps -1 \
    --logging_steps 1 \
    --eval_steps -1 \
    --train_batch_size 128 \
    --micro_train_batch_size 8 \
-   --pretrain meta-llama/Llama-3.1-8B-Instruct \
+   --pretrain google/gemma-2b-it \
    --bf16 \
    --max_epochs 2 \
    --max_len 4096 \
@@ -18,7 +18,7 @@ openrlhf.cli.train_gpm \
    --general_preference_tau 0.1 \
    --dataset_probs 1 \
    --group_size 1 \
-   --value_head_dim 8 \
+   --value_head_dim 6 \
    --is_general_preference \
    --is_preference_embedding_normalized \
    --return_prompt_length \
