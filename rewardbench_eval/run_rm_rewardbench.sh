@@ -1,21 +1,21 @@
-MODEL_NAME="Llama-3.1-8B-Instruct-GPM-dim8"
+MODEL_NAME="google/gemma-2b-it-RM"
 export CUDA_VISIBLE_DEVICES=0
 python run_rm_rewardbench.py \
 --model "../checkpoint/${MODEL_NAME}" \
---tokenizer 'meta-llama/Llama-3.1-8B-Instruct' \
+--tokenizer 'google/gemma-2b-it' \
 --chat_template raw \
 --is_custom_model \
 --do_not_save \
 --enable_beaker_save \
 --model_name "${MODEL_NAME}" \
 --batch_size 32 \
---value_head_dim 8 \
+--value_head_dim 1 \
 --max_length 4096 \
---is_general_preference \
---is_preference_embedding_normalized \
---add_prompt_head \
---is_using_nonlinear_value_head \
---is_using_nonlinear_prompt_gate
+#--is_general_preference \
+#--is_preference_embedding_normalized \
+#--add_prompt_head \
+#--is_using_nonlinear_value_head \
+#--is_using_nonlinear_prompt_gate
 
 # Optional flags:
 # --bf16 \

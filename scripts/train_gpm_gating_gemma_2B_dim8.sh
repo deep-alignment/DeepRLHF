@@ -2,7 +2,7 @@ set -x
 
 read -r -d '' training_commands <<EOF
 openrlhf.cli.train_gpm \
-   --save_path ./checkpoint/google/gemma-2b-it-GPM-dim8 \
+   --save_path ./checkpoint/google/gemma-2b-it-GPM-nol2-dim8 \
    --save_steps -1 \
    --logging_steps 1 \
    --eval_steps -1 \
@@ -20,7 +20,6 @@ openrlhf.cli.train_gpm \
    --group_size 1 \
    --value_head_dim 8 \
    --is_general_preference \
-   --is_preference_embedding_normalized \
    --return_prompt_length \
    --add_prompt_head \
    --is_using_nonlinear_value_head \
